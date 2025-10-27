@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 16px;
+  }
+  
+  body {
+    font-family: 'Inter', sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+  }
+}
+
+/* Cores personalizadas do sistema */
+:root {
+  --azul-principal: #031f5f;
+  --azure-vivido: #00afee;
+  --rosa-neon: #ca00ca;
+  --marrom: #c2af00;
+  --verde-botao: #ccff00;
+  --preto-fundo: #000000;
+}
+
+.bg-azul-principal {
+  background-color: var(--azul-principal);
+}
+
+.bg-azure-vivido {
+  background-color: var(--azure-vivido);
+}
+
+.bg-rosa-neon {
+  background-color: var(--rosa-neon);
+}
+
+.bg-marrom {
+  background-color: var(--marrom);
+}
+
+.bg-verde-botao {
+  background-color: var(--verde-botao);
+}
+
+.bg-preto-fundo {
+  background-color: var(--preto-fundo);
+}
+
+.text-azul-principal {
+  color: var(--azul-principal);
+}
+
+.text-azure-vivido {
+  color: var(--azure-vivido);
+}
+
+.text-rosa-neon {
+  color: var(--rosa-neon);
+}
+
+.text-marrom {
+  color: var(--marrom);
+}
+
+.text-verde-botao {
+  color: var(--verde-botao);
+}
+
+.border-azul-principal {
+  border-color: var(--azul-principal);
+}
+
+.border-azure-vivido {
+  border-color: var(--azure-vivido);
+}
+
+/* Componentes personalizados */
+.btn-primary {
+  background-color: var(--verde-botao);
+  color: var(--preto-fundo);
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background-color: var(--azure-vivido);
+  color: white;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: opacity 0.2s;
+}
+
+.btn-secondary:hover {
+  opacity: 0.9;
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  outline: none;
+}
+
+.input:focus {
+  ring: 2px;
+  ring-color: var(--azure-vivido);
+  border-color: transparent;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--azure-vivido);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--azul-principal);
+}

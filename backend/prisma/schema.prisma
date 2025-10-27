@@ -1,0 +1,194 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuarios {
+  id               Int       @id @default(autoincrement())
+  uuid             String    @default(uuid()) @unique
+  nome             String
+  email            String    @unique
+  senha            String
+  tipo             String    // paciente, medico, admin
+  telefone         String?
+  cpf              String?   @unique
+  data_nascimento  DateTime?
+  endereco         Json?
+  ativo            Boolean   @default(true)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  // Relacionamentos
+  medicos          Medicos[]
+  consultas        Consultas[]
+  notificacoes     Notificacoes[]
+  logs_agendamento LogsAgendamento[]
+
+  @@map("usuarios")
+}
+
+model Medicos {
+  id                Int       @id @default(autoincrement())
+  usuario_id        Int
+  crm               String    @unique
+  especialidade     String
+  sub_especialidade String?
+  preco_consulta    Decimal
+  tempo_consulta    Int       @default(30)
+  tempo_intervalo   Int       @default(15)
+  bio               String?
+  foto_url          String?
+  ativo             Boolean   @default(true)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  // Relacionamentos
+  usuario           Usuarios           @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  horarios_trabalho HorariosTrabalho[]
+  horarios_disponiveis HorariosDisponiveis[]
+  consultas         Consultas[]
+
+  @@map("medicos")
+}
+
+model Salas {
+  id           Int      @id @default(autoincrement())
+  nome         String
+  numero       String?
+  andar        Int?
+  equipamentos String[]
+  capacidade   Int      @default(1)
+  ativa        Boolean  @default(true)
+  created_at   DateTime @default(now())
+
+  // Relacionamentos
+  horarios_disponiveis HorariosDisponiveis[]
+  consultas           Consultas[]
+
+  @@map("salas")
+}
+
+model HorariosTrabalho {
+  id           Int      @id @default(autoincrement())
+  medico_id    Int
+  dia_semana   Int      // 0=domingo, 6=sábado
+  hora_inicio  String
+  hora_fim     String
+  ativo        Boolean  @default(true)
+  created_at   DateTime @default(now())
+
+  // Relacionamentos
+  medico       Medicos  @relation(fields: [medico_id], references: [id], onDelete: Cascade)
+
+  @@map("horarios_trabalho")
+}
+
+model HorariosDisponiveis {
+  id             Int      @id @default(autoincrement())
+  medico_id      Int
+  sala_id        Int?
+  data           DateTime @db.Date
+  hora_inicio    String
+  hora_fim       String
+  disponivel     Boolean  @default(true)
+  tipo_consulta  String   @default("geral")
+  preco          Decimal?
+  created_at     DateTime @default(now())
+
+  // Relacionamentos
+  medico         Medicos  @relation(fields: [medico_id], references: [id], onDelete: Cascade)
+  sala           Salas?   @relation(fields: [sala_id], references: [id])
+
+  @@unique([medico_id, sala_id, data, hora_inicio])
+  @@map("horarios_disponiveis")
+}
+
+model Consultas {
+  id               Int      @id @default(autoincrement())
+  uuid             String   @default(uuid()) @unique
+  paciente_id      Int
+  medico_id        Int
+  sala_id          Int?
+  data             DateTime @db.Date
+  hora_inicio      String
+  hora_fim         String
+  tipo_consulta    String
+  status           String   @default("agendada") // agendada, confirmada, realizada, cancelada, reagendada
+  observacoes      String?
+  sintomas         String?
+  urgencia         Int      @default(3) // 1-5
+  preco            Decimal?
+  forma_pagamento  String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relacionamentos
+  paciente         Usuarios @relation(fields: [paciente_id], references: [id], onDelete: Cascade)
+  medico           Medicos  @relation(fields: [medico_id], references: [id], onDelete: Cascade)
+  sala             Salas?   @relation(fields: [sala_id], references: [id])
+  logs_agendamento LogsAgendamento[]
+
+  @@map("consultas")
+}
+
+model TiposConsulta {
+  id          Int      @id @default(autoincrement())
+  nome        String
+  duracao     Int      // minutos
+  preco_base  Decimal?
+  descricao   String?
+  ativo       Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  @@map("tipos_consulta")
+}
+
+model Configuracoes {
+  id          Int      @id @default(autoincrement())
+  chave       String   @unique
+  valor       String
+  descricao   String?
+  tipo        String   @default("string")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("configuracoes")
+}
+
+model Notificacoes {
+  id           Int       @id @default(autoincrement())
+  usuario_id   Int
+  tipo         String
+  titulo       String
+  mensagem     String
+  lida         Boolean   @default(false)
+  data_envio   DateTime  @default(now())
+  data_leitura DateTime?
+
+  // Relacionamentos
+  usuario      Usuarios  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("notificacoes")
+}
+
+model LogsAgendamento {
+  id          Int      @id @default(autoincrement())
+  consulta_id Int
+  acao        String
+  usuario_id  Int?
+  detalhes    Json?
+  created_at  DateTime @default(now())
+
+  // Relacionamentos
+  consulta    Consultas @relation(fields: [consulta_id], references: [id], onDelete: Cascade)
+  usuario     Usuarios? @relation(fields: [usuario_id], references: [id])
+
+  @@map("logs_agendamento")
+}

@@ -58,11 +58,20 @@ app.get('/api/health', (req, res) => {
 app.post('/api/auth/login', (req, res) => {
   const { email, senha } = req.body;
   
-  // Usuários de teste
+  // Usuários de teste com 3 tipos diferentes
   const usuarios = {
+    // 👨‍💼 ADMINISTRADORES
     'admin@clinica.com': { id: 1, nome: 'Administrador', tipo: 'admin', senha: 'admin123' },
+    
+    // 👨‍⚕️ MÉDICOS
     'joao.silva@clinica.com': { id: 2, nome: 'Dr. João Silva', tipo: 'medico', senha: '123456' },
-    'carlos.mendes@email.com': { id: 3, nome: 'Carlos Mendes', tipo: 'paciente', senha: '123456' }
+    'maria.santos@clinica.com': { id: 3, nome: 'Dra. Maria Santos', tipo: 'medico', senha: '123456' },
+    'michel@clinica.com': { id: 4, nome: 'Dr. Michel', tipo: 'medico', senha: '123456' },
+    
+    // 👤 PACIENTES
+    'joao.silva@email.com': { id: 5, nome: 'João Silva', tipo: 'paciente', senha: '123456' },
+    'maria.santos@email.com': { id: 6, nome: 'Maria Santos', tipo: 'paciente', senha: '123456' },
+    'carlos.mendes@email.com': { id: 7, nome: 'Carlos Mendes', tipo: 'paciente', senha: '123456' }
   };
 
   const usuario = usuarios[email as keyof typeof usuarios];
@@ -180,8 +189,9 @@ app.post('/api/consultas', (req, res) => {
   
   // Buscar dados do médico
   const medicos = [
-    { id: 1, nome: 'Dr. João Silva', especialidade: 'Cardiologia' },
-    { id: 2, nome: 'Dra. Maria Santos', especialidade: 'Dermatologia' }
+    { id: 2, nome: 'Dr. João Silva', especialidade: 'Cardiologia' },
+    { id: 3, nome: 'Dra. Maria Santos', especialidade: 'Dermatologia' },
+    { id: 4, nome: 'Dr. Michel', especialidade: 'Clínica Geral' }
   ];
   
   const medico = medicos.find(m => m.id === medico_id);
@@ -198,7 +208,9 @@ app.post('/api/consultas', (req, res) => {
   
   // Buscar dados do paciente
   const pacientes = [
-    { id: 3, nome: 'Carlos Mendes', email: 'carlos.mendes@email.com' }
+    { id: 5, nome: 'João Silva', email: 'joao.silva@email.com' },
+    { id: 6, nome: 'Maria Santos', email: 'maria.santos@email.com' },
+    { id: 7, nome: 'Carlos Mendes', email: 'carlos.mendes@email.com' }
   ];
   
   const paciente = pacientes.find(p => p.id === paciente_id);
@@ -387,24 +399,34 @@ app.get('/api/notificacoes/nao-lidas', (req, res) => {
 // Array para simular banco de dados de médicos
 let medicosMock = [
   {
-    id: 1,
+    id: 2,
     nome: 'Dr. João Silva',
     especialidade: 'Cardiologia',
     crm: '12345-SP',
     telefone: '(11) 99999-1111',
     email: 'joao.silva@clinica.com',
     ativo: true,
-    created_at: new Date().toISOString()
+    created_at: '2025-10-28T17:08:21.636Z'
   },
   {
-    id: 2,
+    id: 3,
     nome: 'Dra. Maria Santos',
     especialidade: 'Dermatologia',
     crm: '67890-SP',
     telefone: '(11) 99999-2222',
     email: 'maria.santos@clinica.com',
     ativo: true,
-    created_at: new Date().toISOString()
+    created_at: '2025-10-28T17:08:21.636Z'
+  },
+  {
+    id: 4,
+    nome: 'Dr. Michel',
+    especialidade: 'Clínica Geral',
+    crm: '11111-SP',
+    telefone: '(11) 99999-3333',
+    email: 'michel@clinica.com',
+    ativo: true,
+    created_at: '2025-10-28T17:08:21.636Z'
   }
 ];
 
@@ -413,19 +435,19 @@ app.get('/api/medicos', (req, res) => {
   let medicosFiltrados = [...medicosMock];
   
   // Aplicar filtros
-  if (req.query.especialidade && typeof req.query.especialidade === 'string') {
+  if (req.query.especialidade && typeof req.query.especialidade === 'string' && req.query.especialidade !== '') {
     const especialidade = req.query.especialidade.toLowerCase();
     medicosFiltrados = medicosFiltrados.filter(m => 
       m.especialidade.toLowerCase().includes(especialidade)
     );
   }
   
-  if (req.query.ativo !== undefined) {
+  if (req.query.ativo !== undefined && req.query.ativo !== '') {
     const ativo = req.query.ativo === 'true';
     medicosFiltrados = medicosFiltrados.filter(m => m.ativo === ativo);
   }
   
-  if (req.query.busca && typeof req.query.busca === 'string') {
+  if (req.query.busca && typeof req.query.busca === 'string' && req.query.busca !== '') {
     const busca = req.query.busca.toLowerCase();
     medicosFiltrados = medicosFiltrados.filter(m => 
       m.nome.toLowerCase().includes(busca) || 

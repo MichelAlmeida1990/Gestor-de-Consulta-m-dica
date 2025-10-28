@@ -66,20 +66,11 @@ const Medicos: React.FC = () => {
       enabled: !!usuario,
       staleTime: 0,
       cacheTime: 0,
-      refetchOnWindowFocus: true
+      refetchOnWindowFocus: false
     }
   );
 
   const medicos = medicosData?.data || [];
-  
-  // Debug: log dos dados
-  console.log('🔍 Usuario:', usuario);
-  console.log('🔍 Medicos data:', medicosData);
-  console.log('🔍 Medicos array:', medicos);
-  console.log('🔍 Array length:', medicos.length);
-  console.log('🔍 Is loading:', isLoading);
-  console.log('🔍 Filtros:', filtros);
-  console.log('🔍 Estrutura completa:', JSON.stringify(medicosData, null, 2));
 
   // Mutação para criar médico
   const criarMedicoMutation = useMutation(
@@ -88,9 +79,7 @@ const Medicos: React.FC = () => {
       onSuccess: () => {
         toast.success('Médico cadastrado com sucesso!');
         queryClient.invalidateQueries('medicos');
-        setTimeout(() => {
-          refetch();
-        }, 100);
+        queryClient.refetchQueries('medicos');
         setMostrarFormulario(false);
         reset();
       },

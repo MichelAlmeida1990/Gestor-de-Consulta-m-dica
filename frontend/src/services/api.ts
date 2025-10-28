@@ -20,6 +20,7 @@ const api: AxiosInstance = axios.create({
 api.interceptors.request.use(
   (config) => {
     const tokenData = localStorage.getItem('token');
+    
     if (tokenData) {
       try {
         // Tentar parsear como objeto com timestamp
@@ -32,9 +33,11 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${tokenData}`;
       }
     }
+    
     return config;
   },
   (error) => {
+    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -45,6 +48,10 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    console.error('❌ Response interceptor error:', error);
+    console.error('❌ Response interceptor error status:', error.response?.status);
+    console.error('❌ Response interceptor error data:', error.response?.data);
+    
     if (error.response?.status === 401) {
       // Token expirado ou inválido
       localStorage.removeItem('token');
@@ -137,8 +144,13 @@ export const usuarioService = {
 // Serviços de médicos
 export const medicoService = {
   async listar(params?: any) {
-    const response = await api.get('/medicos', { params });
-    return response.data;
+    try {
+      const response = await api.get('/medicos', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ medicoService.listar - Erro:', error);
+      throw error;
+    }
   },
 
   async buscarPorId(id: number) {
@@ -175,6 +187,16 @@ export const medicoService = {
     const response = await api.get(`/medicos/${id}/estatisticas`, { 
       params: { periodo } 
     });
+    return response.data;
+  },
+
+  async alterarStatus(id: number, ativo: boolean) {
+    const response = await api.put(`/medicos/${id}/status`, { ativo });
+    return response.data;
+  },
+
+  async deletar(id: number) {
+    const response = await api.delete(`/medicos/${id}`);
     return response.data;
   },
 };

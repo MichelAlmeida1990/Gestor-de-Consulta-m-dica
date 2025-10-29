@@ -1,5 +1,4 @@
 import React, { ReactNode, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
@@ -8,7 +7,6 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { usuario } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (

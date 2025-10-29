@@ -39,24 +39,33 @@ const DashboardPaciente: React.FC = () => {
                    Array.isArray(consultasData?.data) ? consultasData.data : [];
   const notificacoes = Array.isArray(notificacoesData?.data) ? notificacoesData.data : [];
 
-  // Calcular estatísticas
-  const totalConsultas = consultas.length;
-  const consultasHoje = consultas.filter(c => 
+  // Calcular estatísticas específicas para o paciente
+  const consultasHoje = consultas.filter((c: any) => 
     new Date(c.data).toDateString() === new Date().toDateString()
   ).length;
-  const consultasAgendadas = consultas.filter(c => c.status === 'agendada').length;
-  const consultasConfirmadas = consultas.filter(c => c.status === 'confirmada').length;
-  const consultasCanceladas = consultas.filter(c => c.status === 'cancelada').length;
+  const consultasAgendadas = consultas.filter((c: any) => c.status === 'agendada').length;
+  const consultasConfirmadas = consultas.filter((c: any) => c.status === 'confirmada').length;
+  const consultasRealizadas = consultas.filter((c: any) => c.status === 'realizada').length;
+  const consultasCanceladas = consultas.filter((c: any) => c.status === 'cancelada').length;
+  
+  // Consultas que precisam de confirmação (agendadas há mais de 24h)
+  const consultasParaConfirmar = consultas.filter((c: any) => {
+    if (c.status !== 'agendada') return false;
+    const dataConsulta = new Date(c.data);
+    const hoje = new Date();
+    const diferencaDias = Math.ceil((dataConsulta.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+    return diferencaDias <= 2 && diferencaDias >= 0; // Próximos 2 dias
+  }).length;
 
   // Próximas consultas (próximos 7 dias)
-  const proximasConsultas = consultas.filter(c => {
+  const proximasConsultas = consultas.filter((c: any) => {
     const dataConsulta = new Date(c.data);
     const hoje = new Date();
     const proximos7Dias = new Date();
     proximos7Dias.setDate(hoje.getDate() + 7);
     
     return dataConsulta >= hoje && dataConsulta <= proximos7Dias && c.status !== 'cancelada';
-  }).sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
+  }).sort((a: any, b: any) => new Date(a.data).getTime() - new Date(b.data).getTime());
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
@@ -88,80 +97,137 @@ const DashboardPaciente: React.FC = () => {
 
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {/* Total de Consultas */}
-        <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-purple-500">
+        {/* Consultas Agendadas */}
+        <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">Total Consultas</p>
-              <p className="text-3xl font-bold text-gray-900">{totalConsultas}</p>
-              <p className="text-xs text-gray-500 mt-1">Suas consultas</p>
+              <p className="text-sm font-medium text-gray-600 mb-1">Agendadas</p>
+              <p className="text-3xl font-bold text-gray-900">{consultasAgendadas}</p>
+              <p className="text-xs text-gray-500 mt-1">Aguardando confirmação</p>
             </div>
-            <div className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg">
+            <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg">
               <Calendar className="h-8 w-8 text-white" />
             </div>
           </div>
         </div>
 
+        {/* Consultas Confirmadas */}
+        <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-green-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-1">Confirmadas</p>
+              <p className="text-3xl font-bold text-gray-900">{consultasConfirmadas}</p>
+              <p className="text-xs text-gray-500 mt-1">Prontas para atendimento</p>
+            </div>
+            <div className="p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg">
+              <CheckCircle className="h-8 w-8 text-white" />
+            </div>
+          </div>
+        </div>
+
         {/* Consultas Hoje */}
-        <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-pink-500">
+        <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-1">Hoje</p>
               <p className="text-3xl font-bold text-gray-900">{consultasHoje}</p>
               <p className="text-xs text-gray-500 mt-1">Consultas de hoje</p>
             </div>
-            <div className="p-4 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl shadow-lg">
+            <div className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg">
               <Clock className="h-8 w-8 text-white" />
             </div>
           </div>
         </div>
 
-        {/* Próximas Consultas */}
-        <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-rose-500">
+        {/* Consultas Realizadas */}
+        <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-purple-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">Próximos 7 dias</p>
-              <p className="text-3xl font-bold text-gray-900">{proximasConsultas.length}</p>
-              <p className="text-xs text-gray-500 mt-1">Consultas agendadas</p>
+              <p className="text-sm font-medium text-gray-600 mb-1">Realizadas</p>
+              <p className="text-3xl font-bold text-gray-900">{consultasRealizadas}</p>
+              <p className="text-xs text-gray-500 mt-1">Consultas concluídas</p>
             </div>
-            <div className="p-4 bg-gradient-to-br from-rose-500 to-rose-600 rounded-2xl shadow-lg">
+            <div className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg">
               <Stethoscope className="h-8 w-8 text-white" />
-            </div>
-          </div>
-        </div>
-
-        {/* Notificações */}
-        <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-indigo-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">Notificações</p>
-              <p className="text-3xl font-bold text-gray-900">{notificacoes.length}</p>
-              <p className="text-xs text-gray-500 mt-1">Mensagens pendentes</p>
-            </div>
-            <div className="p-4 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg">
-              <Bell className="h-8 w-8 text-white" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Ação Rápida */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Ações Rápidas</h3>
-        <div className="flex flex-wrap gap-4">
+      {/* Alerta para Confirmações Pendentes */}
+      {consultasParaConfirmar > 0 && (
+        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center">
+            <AlertCircle className="h-6 w-6 text-yellow-600 mr-3" />
+            <div>
+              <p className="font-semibold text-yellow-800">
+                Você tem {consultasParaConfirmar} consulta(s) que precisam de confirmação!
+              </p>
+              <p className="text-sm text-yellow-700">
+                Confirme suas consultas para garantir que não sejam canceladas.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ações Rápidas */}
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+          <span className="text-2xl mr-2">⚡</span>
+          Ações Rápidas
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
             to="/agendamento"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="group bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-4 hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Agendar Consulta
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold">Agendar Consulta</p>
+                <p className="text-blue-100 text-sm">Nova consulta</p>
+              </div>
+              <Plus className="h-6 w-6 group-hover:scale-110 transition-transform" />
+            </div>
           </Link>
+          
           <Link
             to="/consultas"
-            className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="group bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl p-4 hover:from-green-600 hover:to-green-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg"
           >
-            <Calendar className="h-4 w-4 mr-2" />
-            Ver Minhas Consultas
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold">Minhas Consultas</p>
+                <p className="text-green-100 text-sm">Ver todas</p>
+              </div>
+              <Calendar className="h-6 w-6 group-hover:scale-110 transition-transform" />
+            </div>
+          </Link>
+          
+          <Link
+            to="/perfil"
+            className="group bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-4 hover:from-purple-600 hover:to-purple-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold">Meu Perfil</p>
+                <p className="text-purple-100 text-sm">Editar dados</p>
+              </div>
+              <User className="h-6 w-6 group-hover:scale-110 transition-transform" />
+            </div>
+          </Link>
+          
+          <Link
+            to="/notificacoes"
+            className="group bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl p-4 hover:from-orange-600 hover:to-orange-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold">Notificações</p>
+                <p className="text-orange-100 text-sm">{notificacoes.length} mensagens</p>
+              </div>
+              <Bell className="h-6 w-6 group-hover:scale-110 transition-transform" />
+            </div>
           </Link>
         </div>
       </div>
@@ -202,35 +268,72 @@ const DashboardPaciente: React.FC = () => {
       {/* Próximas Consultas */}
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Próximas Consultas</h3>
+          <h3 className="text-lg font-medium text-gray-900 flex items-center">
+            <span className="text-2xl mr-2">📅</span>
+            Próximas Consultas
+          </h3>
         </div>
         <div className="p-6">
           {proximasConsultas.length > 0 ? (
             <div className="space-y-4">
               {proximasConsultas.slice(0, 5).map((consulta: any) => (
-                <div key={consulta.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center">
-                    <Stethoscope className="h-5 w-5 text-gray-400 mr-3" />
-                    <div>
-                      <p className="font-medium text-gray-900">{consulta.medico?.nome}</p>
-                      <p className="text-sm text-gray-600">{consulta.tipo_consulta}</p>
+                <div key={consulta.id} className="group bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-4 hover:shadow-md transition-all duration-300 border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center mr-4">
+                        <Stethoscope className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{consulta.medico?.nome}</p>
+                        <p className="text-sm text-gray-600">{consulta.medico?.especialidade}</p>
+                        <p className="text-xs text-gray-500">{consulta.tipo_consulta}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {new Date(consulta.data).toLocaleDateString('pt-BR')}
+                      </p>
+                      <p className="text-sm text-gray-600">{consulta.horario}</p>
+                      <div className="mt-2">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          consulta.status === 'agendada' ? 'bg-blue-100 text-blue-800' :
+                          consulta.status === 'confirmada' ? 'bg-green-100 text-green-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {consulta.status === 'agendada' ? '⏳ Agendada' :
+                           consulta.status === 'confirmada' ? '✅ Confirmada' :
+                           consulta.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">{consulta.data}</p>
-                    <p className="text-sm text-gray-600">{consulta.horario}</p>
-                  </div>
+                  
+                  {/* Ações para consultas agendadas */}
+                  {consulta.status === 'agendada' && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end space-x-2">
+                      <button className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors">
+                        ✅ Confirmar
+                      </button>
+                      <button className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors">
+                        ❌ Cancelar
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-500 mb-4">Nenhuma consulta agendada para os próximos 7 dias</p>
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Calendar className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="text-gray-500 mb-4 text-lg">Nenhuma consulta agendada para os próximos 7 dias</p>
+              <p className="text-gray-400 mb-6">Que tal agendar uma nova consulta?</p>
               <Link
                 to="/agendamento"
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg"
               >
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-5 w-5 mr-2" />
                 Agendar Nova Consulta
               </Link>
             </div>

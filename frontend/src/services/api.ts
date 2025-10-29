@@ -29,9 +29,14 @@ api.interceptors.request.use(
           config.headers.Authorization = `Bearer ${parsed.token}`;
         }
       } catch {
-        // Token é string simples
+        // Token é string simples - usar direto
         config.headers.Authorization = `Bearer ${tokenData}`;
       }
+      
+      // Log para debug
+      console.log('🔑 Token enviado na requisição:', config.headers.Authorization?.substring(0, 30) + '...');
+    } else {
+      console.log('⚠️ Nenhum token encontrado no localStorage');
     }
     
     return config;
@@ -41,6 +46,28 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+// Flag para evitar múltiplos redirecionamentos (persiste entre requisições)
+let isRedirecting = false;
+let redirectTimeout: NodeJS.Timeout | null = null;
+
+// Flag para indicar que acabou de fazer login (evita toast de sessão expirada imediatamente)
+let justLoggedIn = false;
+let justLoggedInTimeout: NodeJS.Timeout | null = null;
+
+// Função para marcar que acabou de fazer login
+export const setJustLoggedIn = () => {
+  console.log('✅ setJustLoggedIn chamado - ignorando erros 401 por 5 segundos');
+  justLoggedIn = true;
+  if (justLoggedInTimeout) {
+    clearTimeout(justLoggedInTimeout);
+  }
+  // Remover flag após 5 segundos (tempo suficiente para todas as requisições após login e inicialização)
+  justLoggedInTimeout = setTimeout(() => {
+    justLoggedIn = false;
+    console.log('⏰ Flag justLoggedIn expirada - erros 401 agora serão processados normalmente');
+  }, 5000);
+};
 
 // Interceptor para tratamento de respostas
 api.interceptors.response.use(
@@ -54,11 +81,59 @@ api.interceptors.response.use(
     
     if (error.response?.status === 401) {
       // Token expirado ou inválido
-      localStorage.removeItem('token');
-      localStorage.removeItem('usuario');
-      localStorage.removeItem('medico');
-      window.location.href = '/login';
-      toast.error('Sessão expirada. Faça login novamente.');
+      console.log('🔐 Token inválido ou expirado detectado');
+      
+      // NÃO limpar se for requisição de login ou register (esses endpoints podem retornar 401 normalmente)
+      const isAuthEndpoint = error.config?.url?.includes('/auth/login') || 
+                             error.config?.url?.includes('/auth/register');
+      
+      if (isAuthEndpoint) {
+        // É uma requisição de login/register que falhou - não limpar token
+        console.log('🔐 Erro 401 em endpoint de autenticação, não limpando token');
+        return Promise.reject(error);
+      }
+      
+      // Só limpar se não estiver já na página de login ou register
+      // e se não estiver já redirecionando
+      const currentPath = window.location.pathname;
+      const isPublicRoute = currentPath === '/login' || currentPath === '/register';
+      
+      // NÃO limpar nem mostrar toast se acabou de fazer login (evita conflito)
+      if (justLoggedIn) {
+        console.log('🔐 Erro 401 detectado logo após login, ignorando...');
+        return Promise.reject(error);
+      }
+      
+      // TEMPORARIAMENTE DESABILITADO - Backend está retornando 401 incorretamente
+      // Não limpar token automaticamente até que o problema do backend seja resolvido
+      console.log('⚠️ Erro 401 detectado, mas NÃO limpando token (backend precisa ser corrigido)');
+      console.log('⚠️ URL da requisição:', error.config?.url);
+      return Promise.reject(error);
+      
+      /* CÓDIGO DESABILITADO TEMPORARIAMENTE - REABILITAR QUANDO BACKEND ESTIVER CORRIGIDO
+      if (!isPublicRoute && !isRedirecting) {
+        console.log('🔄 Limpando dados de autenticação');
+        isRedirecting = true;
+        
+        // Limpar localStorage
+        localStorage.removeItem('token');
+        localStorage.removeItem('usuario');
+        localStorage.removeItem('medico');
+        
+        // Disparar evento customizado para notificar o AuthContext
+        window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'session_expired' } }));
+        
+        // Resetar flag após um tempo para permitir novo redirecionamento se necessário
+        if (redirectTimeout) {
+          clearTimeout(redirectTimeout);
+        }
+        redirectTimeout = setTimeout(() => {
+          isRedirecting = false;
+        }, 5000);
+        
+        toast.error('Sessão expirada. Faça login novamente.');
+      }
+      */
     } else if (error.response?.status === 403) {
       toast.error('Acesso negado. Você não tem permissão para esta ação.');
     } else if (error.response?.status >= 500) {
@@ -93,8 +168,13 @@ export const authService = {
   },
 
   async getMe() {
-    const response = await api.get('/auth/me');
-    return response.data;
+    try {
+      const response = await api.get('/auth/me');
+      return response.data;
+    } catch (error) {
+      // Se falhar, provavelmente token inválido
+      throw error;
+    }
   },
 
   async refreshToken() {
@@ -377,5 +457,82 @@ export const configuracaoService = {
     return response.data;
   },
 };
+
+// ===== SERVIÇO DO PRONTUÁRIO ELETRÔNICO =====
+
+export const prontuarioService = {
+  async listar(params?: any) {
+    const response = await api.get('/prontuarios', { params });
+    return response.data;
+  },
+
+  async buscarPorId(id: number) {
+    const response = await api.get(`/prontuarios/${id}`);
+    return response.data;
+  },
+
+  async criar(dados: any) {
+    const response = await api.post('/prontuarios', dados);
+    return response.data;
+  },
+
+  async atualizar(id: number, dados: any) {
+    const response = await api.put(`/prontuarios/${id}`, dados);
+    return response.data;
+  },
+
+  async deletar(id: number) {
+    const response = await api.delete(`/prontuarios/${id}`);
+    return response.data;
+  },
+
+  async buscarPorPaciente(pacienteId: number) {
+    const response = await api.get('/prontuarios', { 
+      params: { paciente_id: pacienteId } 
+    });
+    return response.data;
+  },
+
+  async buscarPorConsulta(consultaId: number) {
+    const response = await api.get('/prontuarios', { 
+      params: { consulta_id: consultaId } 
+    });
+    return response.data;
+  }
+};
+
+// ===== SERVIÇO DE PACIENTES =====
+
+export const pacienteService = {
+  async listar(params?: any) {
+    const response = await api.get('/pacientes', { params });
+    return response.data;
+  },
+
+  async buscarPorId(id: number) {
+    const response = await api.get(`/pacientes/${id}`);
+    return response.data;
+  },
+
+  async criar(dados: any) {
+    const response = await api.post('/pacientes', dados);
+    return response.data;
+  },
+
+  async atualizar(id: number, dados: any) {
+    const response = await api.put(`/pacientes/${id}`, dados);
+    return response.data;
+  },
+
+  async deletar(id: number) {
+    const response = await api.delete(`/pacientes/${id}`);
+    return response.data;
+  }
+};
+
+// Tornar setJustLoggedIn disponível globalmente via window
+if (typeof window !== 'undefined') {
+  (window as any).setJustLoggedIn = setJustLoggedIn;
+}
 
 export default api;

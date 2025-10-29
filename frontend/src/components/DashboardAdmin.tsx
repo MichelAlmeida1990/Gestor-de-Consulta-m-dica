@@ -4,15 +4,11 @@ import { consultaService, medicoService, notificacaoService } from '../services/
 import { 
   Calendar, 
   Clock, 
-  User, 
   Stethoscope, 
   Bell, 
-  TrendingUp,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  Users,
-  Activity
+  AlertCircle
 } from 'lucide-react';
 
 const DashboardAdmin: React.FC = () => {
@@ -42,15 +38,15 @@ const DashboardAdmin: React.FC = () => {
 
   // Calcular estatísticas
   const totalConsultas = consultas.length;
-  const consultasHoje = consultas.filter(c => 
+  const consultasHoje = consultas.filter((c: any) => 
     new Date(c.data).toDateString() === new Date().toDateString()
   ).length;
-  const consultasAgendadas = consultas.filter(c => c.status === 'agendada').length;
-  const consultasConfirmadas = consultas.filter(c => c.status === 'confirmada').length;
-  const consultasCanceladas = consultas.filter(c => c.status === 'cancelada').length;
+  const consultasAgendadas = consultas.filter((c: any) => c.status === 'agendada').length;
+  const consultasConfirmadas = consultas.filter((c: any) => c.status === 'confirmada').length;
+  const consultasCanceladas = consultas.filter((c: any) => c.status === 'cancelada').length;
 
   const totalMedicos = medicos.length;
-  const medicosAtivos = medicos.filter(m => m.ativo).length;
+  const medicosAtivos = medicos.filter((m: any) => m.ativo).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">

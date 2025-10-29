@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { Calendar, Clock, User, Stethoscope, MapPin, AlertCircle, CheckCircle } from 'lucide-react';
+import { Calendar, Clock, Stethoscope, MapPin, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { consultaService, medicoService, salaService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +18,6 @@ interface AgendamentoForm {
 
 const Agendamento: React.FC = () => {
   const { usuario } = useAuth();
-  const [selectedDate, setSelectedDate] = useState<string>('');
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
@@ -26,7 +25,12 @@ const Agendamento: React.FC = () => {
 
   // Buscar médicos disponíveis
   const { data: medicosData } = useQuery('medicos', () => medicoService.listar());
-  const medicos = medicosData?.data || [];
+  const todosMedicos = medicosData?.data || [];
+  
+  // Filtrar médicos baseado no tipo de usuário
+  const medicos = usuario?.tipo === 'medico' 
+    ? todosMedicos.filter((medico: any) => medico.id === usuario.id)
+    : todosMedicos;
 
   // Buscar salas disponíveis
   const { data: salasData } = useQuery('salas', () => salaService.listar());
@@ -70,10 +74,16 @@ const Agendamento: React.FC = () => {
   const createAgendamentoMutation = useMutation(
     (data: any) => consultaService.criar(data),
     {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        console.log('✅ Consulta criada com sucesso:', response);
         toast.success('Consulta agendada com sucesso!');
+        
+        // Invalidar TODAS as queries relacionadas a consultas para atualizar todas as páginas
+        queryClient.invalidateQueries('consultas');
         queryClient.invalidateQueries('consultas-agendamento');
         queryClient.invalidateQueries('dashboard-consultas');
+        queryClient.invalidateQueries('dashboard');
+        
         // Reset form
         setValue('medico_id', 0);
         setValue('sala_id', 0);
@@ -82,10 +92,14 @@ const Agendamento: React.FC = () => {
         setValue('tipo_consulta', '');
         setValue('observacoes', '');
         setValue('urgencia', 'normal');
-        setSelectedDate('');
         setAvailableTimes([]);
+        
+        console.log('✅ Queries invalidadas - lista deve atualizar automaticamente');
       },
       onError: (error: any) => {
+        console.error('❌ Erro ao criar consulta:', error);
+        console.error('❌ Status:', error.response?.status);
+        console.error('❌ Data:', error.response?.data);
         toast.error(error.response?.data?.error?.message || 'Erro ao agendar consulta');
       }
     }
@@ -100,11 +114,15 @@ const Agendamento: React.FC = () => {
     console.log('Dados do formulário:', data);
     console.log('Usuário:', usuario);
     
+    // NÃO enviar paciente_id - o backend vai determinar automaticamente baseado no token
+    // Se for paciente, o backend busca o paciente_id correto da tabela pacientes
+    // Se for admin/medico, seria necessário um campo para selecionar o paciente (futuro)
+    
     const dadosEnvio = {
       ...data,
       medico_id: parseInt(data.medico_id.toString()),
-      sala_id: parseInt(data.sala_id.toString()),
-      paciente_id: parseInt(usuario.id.toString()),
+      sala_id: data.sala_id ? parseInt(data.sala_id.toString()) : null,
+      // NÃO enviar paciente_id - backend resolve automaticamente
       status: 'agendada'
     };
     
@@ -153,6 +171,21 @@ const Agendamento: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Agendamento de Consultas</h1>
             <p className="text-gray-600">Agende sua consulta de forma rápida e inteligente</p>
+            {usuario?.tipo === 'medico' && (
+              <p className="text-sm text-blue-600 mt-1">
+                👨‍⚕️ Modo Médico: Você pode agendar consultas para seus pacientes
+              </p>
+            )}
+            {usuario?.tipo === 'paciente' && (
+              <p className="text-sm text-green-600 mt-1">
+                👤 Modo Paciente: Você está agendando uma consulta para si mesmo
+              </p>
+            )}
+            {usuario?.tipo === 'admin' && (
+              <p className="text-sm text-purple-600 mt-1">
+                👨‍💼 Modo Administrador: Você pode agendar consultas para qualquer paciente
+              </p>
+            )}
           </div>
         </div>
       </div>

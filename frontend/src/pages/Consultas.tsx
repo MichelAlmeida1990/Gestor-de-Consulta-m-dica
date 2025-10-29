@@ -1,20 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { 
   Calendar, 
   Clock, 
   User, 
   Stethoscope, 
-  MapPin, 
   AlertCircle, 
   CheckCircle, 
   XCircle,
   Eye,
-  Edit,
-  Trash2,
   Filter,
-  Search,
-  Plus
+  Search
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { consultaService } from '../services/api';
@@ -22,15 +18,26 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface Consulta {
   id: number;
-  paciente: { nome: string; email: string };
-  medico: { nome: string; especialidade: string };
+  paciente: { 
+    id: number;
+    usuario: { nome: string; email: string; telefone?: string };
+  };
+  medico: { 
+    id: number;
+    nome?: string; // Compatibilidade
+    especialidade: string;
+    crm?: string;
+    usuario?: { nome: string; email: string; telefone?: string };
+  };
+  sala?: { nome: string; numero?: string };
   data: string;
   horario: string;
   status: string;
-  tipo: string;
-  observacoes: string;
+  tipo_consulta: string;
+  observacoes?: string;
   urgencia?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 const Consultas: React.FC = () => {
@@ -47,19 +54,43 @@ const Consultas: React.FC = () => {
   const queryClient = useQueryClient();
 
   // Buscar consultas
-  const { data: consultasData, isLoading } = useQuery(
+  const { data: consultasData, isLoading, error, refetch } = useQuery(
     ['consultas', filtros],
     () => consultaService.listar({ 
       page: 1, 
       limit: 50,
-      ...filtros,
-      ...(usuario?.tipo === 'paciente' ? { paciente_id: usuario.id } : {}),
-      ...(usuario?.tipo === 'medico' ? { medico_id: usuario.id } : {})
+      status: filtros.status || undefined,
+      data_inicio: filtros.data_inicio || undefined,
+      data_fim: filtros.data_fim || undefined,
+      busca: filtros.busca || undefined
+      // Backend aplica filtros de paciente/medico automaticamente baseado no token
     }),
-    { enabled: !!usuario }
+    { 
+      enabled: !!usuario,
+      retry: 1,
+      refetchOnWindowFocus: true, // Recarregar quando a janela recebe foco
+      refetchInterval: false, // Não recarregar automaticamente em intervalo
+      onError: (err: any) => {
+        console.error('❌ Erro ao buscar consultas:', err);
+        console.error('❌ Status:', err.response?.status);
+        console.error('❌ Data:', err.response?.data);
+      },
+      onSuccess: (data) => {
+        console.log('✅ Consultas carregadas com sucesso:', data?.data?.consultas?.length || 0, 'consultas');
+      }
+    }
   );
 
   const consultas = consultasData?.data?.consultas || [];
+  
+  // Debug
+  useEffect(() => {
+    console.log('🔍 Consultas Data:', consultasData);
+    console.log('🔍 Consultas Array:', consultas);
+    console.log('🔍 Loading:', isLoading);
+    console.log('🔍 Error:', error);
+    console.log('🔍 Usuario:', usuario);
+  }, [consultasData, consultas, isLoading, error, usuario]);
 
   // Mutação para cancelar consulta
   const cancelarConsultaMutation = useMutation(
@@ -275,7 +306,11 @@ const Consultas: React.FC = () => {
         ) : (
           <div className="divide-y divide-gray-200">
             {consultas.map((consulta: Consulta) => (
-              <div key={consulta.id} className="p-6 hover:bg-gray-50 transition-colors">
+              <div 
+                key={consulta.id} 
+                className="p-6 hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => handleVerDetalhes(consulta)}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-4 mb-3">
@@ -298,8 +333,10 @@ const Consultas: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <Stethoscope className="w-4 h-4 text-gray-400" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{consulta.medico.nome}</p>
-                          <p className="text-xs text-gray-500">{consulta.medico.especialidade}</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {consulta.medico?.usuario?.nome || consulta.medico?.nome || 'Nome não disponível'}
+                          </p>
+                          <p className="text-xs text-gray-500">{consulta.medico.especialidade || 'Especialidade não informada'}</p>
                         </div>
                       </div>
 
@@ -307,8 +344,12 @@ const Consultas: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <User className="w-4 h-4 text-gray-400" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{consulta.paciente.nome}</p>
-                          <p className="text-xs text-gray-500">{consulta.paciente.email}</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {consulta.paciente?.usuario?.nome || 'Nome não disponível'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {consulta.paciente?.usuario?.email || 'Email não disponível'}
+                          </p>
                         </div>
                       </div>
 
@@ -327,9 +368,9 @@ const Consultas: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4 text-gray-400" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{consulta.tipo}</p>
+                          <p className="text-sm font-medium text-gray-900">{consulta.tipo_consulta || consulta.tipo || 'Consulta'}</p>
                           <p className="text-xs text-gray-500">
-                            {new Date(consulta.created_at).toLocaleDateString('pt-BR')}
+                            {consulta.sala ? `Sala: ${consulta.sala.nome}${consulta.sala.numero ? ` (${consulta.sala.numero})` : ''}` : 'Sem sala definida'}
                           </p>
                         </div>
                       </div>
@@ -346,9 +387,12 @@ const Consultas: React.FC = () => {
                   </div>
 
                   {/* Ações */}
-                  <div className="flex items-center space-x-2 ml-4">
+                  <div className="flex items-center space-x-2 ml-4" onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={() => handleVerDetalhes(consulta)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleVerDetalhes(consulta);
+                      }}
                       className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="Ver detalhes"
                     >
@@ -357,7 +401,10 @@ const Consultas: React.FC = () => {
 
                     {consulta.status === 'agendada' && usuario?.tipo === 'medico' && (
                       <button
-                        onClick={() => handleConfirmar(consulta.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleConfirmar(consulta.id);
+                        }}
                         disabled={confirmarConsultaMutation.isLoading}
                         className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
                         title="Confirmar consulta"
@@ -368,7 +415,10 @@ const Consultas: React.FC = () => {
 
                     {(consulta.status === 'agendada' || consulta.status === 'confirmada') && (
                       <button
-                        onClick={() => handleCancelar(consulta.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCancelar(consulta.id);
+                        }}
                         disabled={cancelarConsultaMutation.isLoading}
                         className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         title="Cancelar consulta"
@@ -418,14 +468,26 @@ const Consultas: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Médico</h4>
-                    <p className="text-gray-700">{consultaSelecionada.medico.nome}</p>
-                    <p className="text-sm text-gray-500">{consultaSelecionada.medico.especialidade}</p>
+                    <p className="text-gray-700">
+                      {consultaSelecionada.medico?.usuario?.nome || consultaSelecionada.medico?.nome || 'Nome não disponível'}
+                    </p>
+                    <p className="text-sm text-gray-500">{consultaSelecionada.medico.especialidade || 'Especialidade não informada'}</p>
+                    {consultaSelecionada.medico?.crm && (
+                      <p className="text-xs text-gray-400">CRM: {consultaSelecionada.medico.crm}</p>
+                    )}
                   </div>
 
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Paciente</h4>
-                    <p className="text-gray-700">{consultaSelecionada.paciente.nome}</p>
-                    <p className="text-sm text-gray-500">{consultaSelecionada.paciente.email}</p>
+                    <p className="text-gray-700">
+                      {consultaSelecionada.paciente?.usuario?.nome || 'Nome não disponível'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {consultaSelecionada.paciente?.usuario?.email || 'Email não disponível'}
+                    </p>
+                    {consultaSelecionada.paciente?.usuario?.telefone && (
+                      <p className="text-xs text-gray-400">Telefone: {consultaSelecionada.paciente.usuario.telefone}</p>
+                    )}
                   </div>
 
                   <div>
@@ -443,8 +505,18 @@ const Consultas: React.FC = () => {
 
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Tipo de Consulta</h4>
-                    <p className="text-gray-700">{consultaSelecionada.tipo}</p>
+                    <p className="text-gray-700">{consultaSelecionada.tipo_consulta || consultaSelecionada.tipo || 'Consulta'}</p>
                   </div>
+
+                  {consultaSelecionada.sala && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2">Sala</h4>
+                      <p className="text-gray-700">{consultaSelecionada.sala.nome}</p>
+                      {consultaSelecionada.sala.numero && (
+                        <p className="text-sm text-gray-500">Número: {consultaSelecionada.sala.numero}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Observações */}

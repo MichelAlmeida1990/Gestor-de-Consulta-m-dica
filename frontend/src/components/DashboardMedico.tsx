@@ -6,7 +6,6 @@ import {
   Calendar, 
   Clock, 
   User, 
-  Stethoscope, 
   Bell, 
   CheckCircle,
   XCircle,
@@ -40,22 +39,22 @@ const DashboardMedico: React.FC = () => {
 
   // Calcular estatísticas
   const totalConsultas = consultas.length;
-  const consultasHoje = consultas.filter(c => 
+  const consultasHoje = consultas.filter((c: any) => 
     new Date(c.data).toDateString() === new Date().toDateString()
   ).length;
-  const consultasAgendadas = consultas.filter(c => c.status === 'agendada').length;
-  const consultasConfirmadas = consultas.filter(c => c.status === 'confirmada').length;
-  const consultasCanceladas = consultas.filter(c => c.status === 'cancelada').length;
+  const consultasAgendadas = consultas.filter((c: any) => c.status === 'agendada').length;
+  const consultasConfirmadas = consultas.filter((c: any) => c.status === 'confirmada').length;
+  const consultasCanceladas = consultas.filter((c: any) => c.status === 'cancelada').length;
 
   // Próximas consultas (próximos 7 dias)
-  const proximasConsultas = consultas.filter(c => {
+  const proximasConsultas = consultas.filter((c: any) => {
     const dataConsulta = new Date(c.data);
     const hoje = new Date();
     const proximos7Dias = new Date();
     proximos7Dias.setDate(hoje.getDate() + 7);
     
     return dataConsulta >= hoje && dataConsulta <= proximos7Dias && c.status !== 'cancelada';
-  }).sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
+  }).sort((a: any, b: any) => new Date(a.data).getTime() - new Date(b.data).getTime());
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50">

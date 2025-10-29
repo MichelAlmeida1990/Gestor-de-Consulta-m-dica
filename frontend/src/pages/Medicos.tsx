@@ -6,7 +6,6 @@ import {
   User, 
   Mail, 
   Phone, 
-  MapPin, 
   AlertCircle, 
   CheckCircle, 
   XCircle,
@@ -22,6 +21,7 @@ import {
 import toast from 'react-hot-toast';
 import { medicoService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useTelefoneFormat } from '../hooks/useTelefoneFormat';
 
 interface Medico {
   id: number;
@@ -56,7 +56,10 @@ const Medicos: React.FC = () => {
   const [modoEdicao, setModoEdicao] = useState(false);
   const queryClient = useQueryClient();
 
-  const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<MedicoForm>();
+  // Hook para formatação de telefone
+  const telefoneFormat = useTelefoneFormat();
+
+  const { register, handleSubmit, setValue, reset, formState: { errors } } = useForm<MedicoForm>();
 
   // Buscar médicos
   const { data: medicosData, isLoading, refetch } = useQuery(
@@ -76,17 +79,33 @@ const Medicos: React.FC = () => {
   const criarMedicoMutation = useMutation(
     (data: MedicoForm) => medicoService.criar(data),
     {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        console.log('✅ Médico criado com sucesso:', response);
         toast.success('Médico cadastrado com sucesso!');
+        
+        // Invalidar todas as queries relacionadas
         queryClient.invalidateQueries('medicos');
-        queryClient.refetchQueries('medicos');
+        queryClient.invalidateQueries('dashboard');
+        queryClient.invalidateQueries('agendamento');
+        queryClient.invalidateQueries('consultas');
+        
+        // Recarregar lista de médicos
+        refetch();
+        
+        // Fechar formulário e limpar
         setMostrarFormulario(false);
+        setModoEdicao(false);
+        setMedicoSelecionado(null);
         reset();
+        telefoneFormat.setFormattedValue('');
       },
       onError: (error: any) => {
+        console.error('❌ Erro ao criar médico:', error);
         const message = error.response?.data?.error?.message || 'Erro ao cadastrar médico';
         if (error.response?.status === 409) {
           toast.error(`Conflito: ${message}`);
+        } else if (error.response?.status === 403) {
+          toast.error('Apenas administradores podem cadastrar médicos');
         } else {
           toast.error(message);
         }
@@ -98,15 +117,36 @@ const Medicos: React.FC = () => {
   const atualizarMedicoMutation = useMutation(
     ({ id, data }: { id: number; data: MedicoForm }) => medicoService.atualizar(id, data),
     {
-      onSuccess: () => {
+      onSuccess: (response) => {
+        console.log('✅ Médico atualizado com sucesso:', response);
         toast.success('Médico atualizado com sucesso!');
+        
+        // Invalidar todas as queries relacionadas
         queryClient.invalidateQueries('medicos');
+        queryClient.invalidateQueries('dashboard');
+        queryClient.invalidateQueries('agendamento');
+        queryClient.invalidateQueries('consultas');
+        
+        // Recarregar lista de médicos
+        refetch();
+        
+        // Fechar formulário e limpar
         setMostrarFormulario(false);
         setModoEdicao(false);
+        setMedicoSelecionado(null);
         reset();
+        telefoneFormat.setFormattedValue('');
       },
       onError: (error: any) => {
-        toast.error(error.response?.data?.error?.message || 'Erro ao atualizar médico');
+        console.error('❌ Erro ao atualizar médico:', error);
+        const message = error.response?.data?.error?.message || 'Erro ao atualizar médico';
+        if (error.response?.status === 409) {
+          toast.error(`Conflito: ${message}`);
+        } else if (error.response?.status === 403) {
+          toast.error('Apenas administradores podem atualizar médicos');
+        } else {
+          toast.error(message);
+        }
       }
     }
   );
@@ -161,6 +201,7 @@ const Medicos: React.FC = () => {
     setValue('nome', medico.nome);
     setValue('especialidade', medico.especialidade);
     setValue('crm', medico.crm);
+    telefoneFormat.setFormattedValue(medico.telefone);
     setValue('telefone', medico.telefone);
     setValue('email', medico.email);
     setValue('ativo', medico.ativo);
@@ -184,6 +225,7 @@ const Medicos: React.FC = () => {
     setMedicoSelecionado(null);
     setMostrarFormulario(true);
     reset();
+    telefoneFormat.setFormattedValue('');
   };
 
   const handleFecharFormulario = () => {
@@ -191,6 +233,7 @@ const Medicos: React.FC = () => {
     setModoEdicao(false);
     setMedicoSelecionado(null);
     reset();
+    telefoneFormat.setFormattedValue('');
   };
 
   const especialidades = [
@@ -615,8 +658,15 @@ const Medicos: React.FC = () => {
                     </label>
                     <input
                       {...register('telefone', { required: 'Telefone é obrigatório' })}
+                      value={telefoneFormat.value}
+                      onChange={(e) => {
+                        telefoneFormat.handleChange(e);
+                        setValue('telefone', telefoneFormat.getNumbersOnly());
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-azure-vivido focus:border-transparent"
                       placeholder="(11) 99999-9999"
+                      type="tel"
+                      maxLength={15}
                     />
                     {errors.telefone && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -641,7 +691,7 @@ const Medicos: React.FC = () => {
                         }
                       })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-azure-vivido focus:border-transparent"
-                      placeholder="medico@clinica.com"
+                      placeholder="exemplo@email.com"
                     />
                     {errors.email && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">

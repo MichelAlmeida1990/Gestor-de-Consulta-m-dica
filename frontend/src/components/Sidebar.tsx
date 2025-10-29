@@ -11,6 +11,7 @@ import {
   Stethoscope,
   BarChart3,
   Shield,
+  FileText,
   X
 } from 'lucide-react';
 
@@ -47,6 +48,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
       label: 'Médicos',
       path: '/medicos',
       roles: ['paciente', 'medico', 'admin']
+    },
+    {
+      icon: FileText,
+      label: 'Prontuário',
+      path: '/prontuario',
+      roles: ['medico', 'admin']
     },
     {
       icon: Bell,

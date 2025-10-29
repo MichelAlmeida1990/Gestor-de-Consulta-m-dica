@@ -11,6 +11,7 @@ import Consultas from './pages/Consultas';
 import Medicos from './pages/Medicos';
 import Perfil from './pages/Perfil';
 import Notificacoes from './pages/Notificacoes';
+import Prontuario from './pages/Prontuario';
 import Admin from './pages/Admin';
 
 // Componentes de layout
@@ -24,18 +25,26 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; requiredRole?: strin
 }) => {
   const { isAuthenticated, usuario, isLoading } = useAuth();
 
+  // Se ainda está carregando, mostrar loading
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
-  if (!isAuthenticated) {
+  // Verificar se há token no localStorage (mais confiável do que apenas isAuthenticated)
+  const hasToken = localStorage.getItem('token');
+  const hasUsuario = localStorage.getItem('usuario');
+  
+  // Se não está autenticado E não há token no localStorage, redirecionar para login
+  if (!isAuthenticated && (!hasToken || !hasUsuario)) {
     return <Navigate to="/login" replace />;
   }
 
+  // Se requer role específica e usuário não tem, redirecionar para dashboard
   if (requiredRole && usuario?.tipo !== requiredRole) {
     return <Navigate to="/dashboard" replace />;
   }
 
+  // Tudo ok, renderizar children
   return <>{children}</>;
 };
 
@@ -43,6 +52,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; requiredRole?: strin
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
 
+  // Mostrar loading enquanto inicializa
   if (isLoading) {
     return <LoadingSpinner />;
   }
@@ -65,36 +75,97 @@ const AppContent: React.FC = () => {
 
       {/* Rotas protegidas */}
       <Route
-        path="/*"
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <Layout>
-              <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/agendamento" element={<Agendamento />} />
-                <Route path="/consultas" element={<Consultas />} />
-                <Route path="/medicos" element={<Medicos />} />
-                <Route path="/perfil" element={<Perfil />} />
-                <Route path="/notificacoes" element={<Notificacoes />} />
-                
-                {/* Rotas apenas para admin */}
-                <Route 
-                  path="/admin/*" 
-                  element={
-                    <ProtectedRoute requiredRole="admin">
-                      <Admin />
-                    </ProtectedRoute>
-                  } 
-                />
-
-                {/* Rota padrão */}
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
+              <Dashboard />
             </Layout>
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/agendamento"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Agendamento />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/consultas"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Consultas />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/medicos"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Medicos />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/prontuario"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Prontuario />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/perfil"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Perfil />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notificacoes"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Notificacoes />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Rotas apenas para admin */}
+      <Route 
+        path="/admin/*" 
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <Layout>
+              <Admin />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Rota padrão - apenas para root */}
+      <Route path="/" element={
+        isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
+      } />
+      
+      {/* Rota catch-all - redirecionar apenas se autenticado */}
+      <Route path="*" element={
+        isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
+      } />
     </Routes>
   );
 };

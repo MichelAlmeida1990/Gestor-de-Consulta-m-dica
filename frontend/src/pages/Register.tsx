@@ -4,17 +4,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { RegisterForm } from '../types';
 import { Eye, EyeOff, Stethoscope, User, Mail, Lock, Phone, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { useTelefoneFormat } from '../hooks/useTelefoneFormat';
 
 const Register: React.FC = () => {
   const { register: registerUser, isLoading } = useAuth();
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
 
+  // Hook para formatação de telefone
+  const telefoneFormat = useTelefoneFormat();
+
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<RegisterForm>();
 
@@ -106,15 +110,22 @@ const Register: React.FC = () => {
                 </label>
                 <input
                   {...register('telefone', {
+                    required: 'Telefone é obrigatório',
                     pattern: {
                       value: /^\(\d{2}\)\s\d{4,5}-\d{4}$/,
                       message: 'Telefone deve estar no formato (XX) XXXXX-XXXX'
                     }
                   })}
+                  value={telefoneFormat.value}
+                  onChange={(e) => {
+                    telefoneFormat.handleChange(e);
+                    setValue('telefone', telefoneFormat.getNumbersOnly());
+                  }}
                   type="tel"
                   id="telefone"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-azure-vivido focus:border-transparent"
                   placeholder="(11) 99999-9999"
+                  maxLength={15}
                 />
                 {errors.telefone && (
                   <p className="mt-1 text-sm text-red-600">{errors.telefone.message}</p>
@@ -136,41 +147,20 @@ const Register: React.FC = () => {
               </div>
             </div>
 
-            {/* Tipo de usuário */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de conta
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input
-                    {...register('tipo', { required: 'Tipo é obrigatório' })}
-                    type="radio"
-                    value="paciente"
-                    className="mr-3"
-                  />
-                  <div>
-                    <div className="font-medium">Paciente</div>
-                    <div className="text-sm text-gray-500">Agendar consultas</div>
-                  </div>
-                </label>
-                <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input
-                    {...register('tipo', { required: 'Tipo é obrigatório' })}
-                    type="radio"
-                    value="medico"
-                    className="mr-3"
-                  />
-                  <div>
-                    <div className="font-medium">Médico</div>
-                    <div className="text-sm text-gray-500">Atender pacientes</div>
-                  </div>
-                </label>
-              </div>
-              {errors.tipo && (
-                <p className="mt-1 text-sm text-red-600">{errors.tipo.message}</p>
-              )}
+            {/* Tipo de usuário - apenas pacientes podem se cadastrar */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <strong>Importante:</strong> Este cadastro é apenas para pacientes. 
+                O cadastro de médicos é feito exclusivamente pelo administrador do sistema.
+              </p>
             </div>
+            
+            {/* Tipo fixo como paciente (oculto) */}
+            <input
+              {...register('tipo')}
+              type="hidden"
+              value="paciente"
+            />
 
             {/* Senhas */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

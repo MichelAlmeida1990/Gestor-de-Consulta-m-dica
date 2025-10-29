@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { LoginForm } from '../types';
 import { Eye, EyeOff, Stethoscope } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
 
 const Login: React.FC = () => {
   const { login, isLoading } = useAuth();
@@ -123,76 +122,6 @@ const Login: React.FC = () => {
             </p>
           </div>
 
-          {/* Usuários de Teste */}
-          <div className="mt-8 p-4 bg-gray-50 rounded-xl">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 text-center">
-              🧪 Usuários para Teste
-            </h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between items-center p-2 bg-white rounded-lg">
-                <div>
-                  <span className="font-medium text-gray-900">👨‍💼 Admin</span>
-                  <p className="text-gray-600">admin@clinica.com</p>
-                </div>
-                <button
-                  onClick={() => {
-                    const emailInput = document.getElementById('email') as HTMLInputElement;
-                    const senhaInput = document.getElementById('senha') as HTMLInputElement;
-                    if (emailInput && senhaInput) {
-                      emailInput.value = 'admin@clinica.com';
-                      senhaInput.value = 'admin123';
-                    }
-                  }}
-                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
-                >
-                  Usar
-                </button>
-              </div>
-              
-              <div className="flex justify-between items-center p-2 bg-white rounded-lg">
-                <div>
-                  <span className="font-medium text-gray-900">👨‍⚕️ Médico</span>
-                  <p className="text-gray-600">michel@clinica.com</p>
-                </div>
-                <button
-                  onClick={() => {
-                    const emailInput = document.getElementById('email') as HTMLInputElement;
-                    const senhaInput = document.getElementById('senha') as HTMLInputElement;
-                    if (emailInput && senhaInput) {
-                      emailInput.value = 'michel@clinica.com';
-                      senhaInput.value = '123456';
-                    }
-                  }}
-                  className="px-3 py-1 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
-                >
-                  Usar
-                </button>
-              </div>
-              
-              <div className="flex justify-between items-center p-2 bg-white rounded-lg">
-                <div>
-                  <span className="font-medium text-gray-900">👤 Paciente</span>
-                  <p className="text-gray-600">joao.silva@email.com</p>
-                </div>
-                <button
-                  onClick={() => {
-                    const emailInput = document.getElementById('email') as HTMLInputElement;
-                    const senhaInput = document.getElementById('senha') as HTMLInputElement;
-                    if (emailInput && senhaInput) {
-                      emailInput.value = 'joao.silva@email.com';
-                      senhaInput.value = '123456';
-                    }
-                  }}
-                  className="px-3 py-1 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 transition-colors"
-                >
-                  Usar
-                </button>
-              </div>
-            </div>
-            <p className="text-center text-gray-500 mt-2 text-xs">
-              Clique em "Usar" para preencher automaticamente
-            </p>
-          </div>
         </div>
 
         {/* Informações adicionais */}

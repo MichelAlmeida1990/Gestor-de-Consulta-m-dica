@@ -12,6 +12,7 @@ import Medicos from './pages/Medicos';
 import Perfil from './pages/Perfil';
 import Notificacoes from './pages/Notificacoes';
 import Prontuario from './pages/Prontuario';
+import Financeiro from './pages/Financeiro';
 import Admin from './pages/Admin';
 
 // Componentes de layout
@@ -120,6 +121,16 @@ const AppContent: React.FC = () => {
           <ProtectedRoute>
             <Layout>
               <Prontuario />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/financeiro"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Financeiro />
             </Layout>
           </ProtectedRoute>
         }

@@ -58,61 +58,48 @@ Sistema completo de agendamento de consultas médicas com funcionalidades avanç
 - **Prisma** como ORM
 - **Migrações** automáticas
 
-## 📦 Instalação e Execução
+## 📦 Instalação Rápida
 
 ### Pré-requisitos
 - Node.js 18+
-- PostgreSQL 14+
-- Git
+- npm ou yarn
 
-### 1. Clone o repositório
+### Instalação Rápida
+
 ```bash
+# 1. Clone o repositório
 git clone https://github.com/MichelAlmeida1990/Gestor-de-Consulta-m-dica.git
 cd Gestor-de-Consulta-m-dica
-```
 
-### 2. Instale as dependências
-```bash
-# Instalar dependências do projeto principal
-npm install
+# 2. Instale todas as dependências
+npm run install:all
 
-# Instalar dependências do backend
-cd backend
-npm install
-
-# Instalar dependências do frontend
-cd ../frontend
-npm install
-```
-
-### 3. Configure o banco de dados
-```bash
-# Criar banco PostgreSQL
-createdb clinica_med
-
-# Executar schema SQL
-psql -d clinica_med -f database/schema.sql
-
-# Popular com dados iniciais
-psql -d clinica_med -f database/seed.sql
-```
-
-### 4. Configure as variáveis de ambiente
-```bash
-# Backend
-cp backend/env.example backend/.env
-# Edite o arquivo .env com suas configurações
-```
-
-### 5. Execute o projeto
-```bash
-# Na raiz do projeto
+# 3. Execute o sistema
 npm run dev
 ```
 
 O sistema estará disponível em:
 - **Frontend**: http://localhost:3002
 - **Backend**: http://localhost:3001
+
+### ⚠️ Problemas com Portas?
+
+Se o backend iniciar na porta errada, verifique a variável de ambiente PORT:
+```bash
+# Windows PowerShell
+echo $env:PORT
+
+# Se existir, remova:
+[Environment]::SetEnvironmentVariable("PORT", $null, "User")
+
+# Depois reinicie o terminal e execute:
+npm run dev
+```
+
+## 📚 Documentação Completa
+
+Para instruções detalhadas, solução de problemas e configuração avançada, consulte:
+👉 **[INSTALL.md](INSTALL.md)** - Guia Completo de Instalação
 
 ## 🎨 Paleta de Cores
 

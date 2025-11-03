@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import database from './database/index';
@@ -897,7 +900,7 @@ app.get('/api/consultas', async (req: Request, res: Response): Promise<void> => 
     console.log('📋 Buscando consultas com filtros:', filtros);
     console.log('👤 Tipo de usuário:', usuario.tipo);
     console.log('👤 Usuário ID:', usuario.id);
-    
+
     const consultas = await ConsultaService.listar(filtros);
     
     console.log(`✅ ${consultas.length} consultas encontradas`);
@@ -1067,6 +1070,44 @@ app.post('/api/consultas', async (req: Request, res: Response): Promise<void> =>
 
     console.log('✅ Consulta criada com sucesso - ID:', consulta.id);
 
+    // Criar notificações para paciente e médico
+    try {
+      // Buscar detalhes completos da consulta
+      const consultaDetalhes = await ConsultaService.listar({ id: consulta.id });
+      if (consultaDetalhes.length > 0) {
+        const consultaCompleta = consultaDetalhes[0];
+        
+        // Notificação para o paciente
+        if (consultaCompleta.paciente?.usuario_id) {
+          await database.run(`
+            INSERT INTO notificacoes (usuario_id, titulo, mensagem, tipo)
+            VALUES (?, ?, ?, ?)
+          `, [
+            consultaCompleta.paciente.usuario_id,
+            'Nova Consulta Agendada',
+            `Sua consulta com ${consultaCompleta.medico?.usuario?.nome || 'o médico'} foi agendada para ${consultaCompleta.data} às ${consultaCompleta.horario}.`,
+            'info'
+          ]);
+        }
+        
+        // Notificação para o médico
+        if (consultaCompleta.medico?.usuario_id) {
+          await database.run(`
+            INSERT INTO notificacoes (usuario_id, titulo, mensagem, tipo)
+            VALUES (?, ?, ?, ?)
+          `, [
+            consultaCompleta.medico.usuario_id,
+            'Nova Consulta Agendada',
+            `Uma nova consulta com ${consultaCompleta.paciente?.usuario?.nome || 'o paciente'} foi agendada para ${consultaCompleta.data} às ${consultaCompleta.horario}.`,
+            'info'
+          ]);
+        }
+      }
+    } catch (notifError) {
+      console.error('⚠️ Erro ao criar notificações de agendamento:', notifError);
+      // Não falhar a requisição se a notificação falhar
+    }
+
     res.status(201).json({
       success: true,
       data: consulta,
@@ -1085,18 +1126,146 @@ app.post('/api/consultas', async (req: Request, res: Response): Promise<void> =>
 });
 
 // Confirmar consulta
-app.post('/api/consultas/:id/confirmar', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
+app.put('/api/consultas/:id/confirmar', async (req: Request, res: Response): Promise<void> => {
   try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
     const id = parseInt(req.params.id);
-    const consulta = await ConsultaService.confirmar(id);
+    
+    // Buscar consulta para verificar permissões
+    const consultas = await ConsultaService.listar({ id });
+    if (consultas.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Consulta não encontrada',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    const consulta = consultas[0];
+    
+    // Verificar permissões: paciente, médico ou admin podem confirmar
+    let temPermissao = false;
+    
+    if (usuario.tipo === 'admin') {
+      temPermissao = true;
+    } else if (usuario.tipo === 'paciente') {
+      const paciente = await database.get('SELECT id FROM pacientes WHERE usuario_id = ?', [usuario.id]);
+      if (paciente && consulta.paciente_id === paciente.id) {
+        temPermissao = true;
+      }
+    } else if (usuario.tipo === 'medico') {
+      const medico = await database.get('SELECT id FROM medicos WHERE usuario_id = ?', [usuario.id]);
+      if (medico && consulta.medico_id === medico.id) {
+        temPermissao = true;
+      }
+    }
+    
+    if (!temPermissao) {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Você não tem permissão para confirmar esta consulta',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    // Verificar se a consulta pode ser confirmada
+    if (consulta.status !== 'agendada') {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: `Consulta já está ${consulta.status}. Apenas consultas agendadas podem ser confirmadas.`,
+          statusCode: 400
+        }
+      });
+      return;
+    }
+    
+    console.log('✅ Confirmando consulta - ID:', id, 'por usuário:', usuario.email);
+    
+    const consultaConfirmada = await ConsultaService.confirmar(id);
+    
+    // Criar notificações para paciente e médico
+    try {
+      // Buscar paciente e médico
+      const consultaDetalhes = await ConsultaService.listar({ id });
+      if (consultaDetalhes.length > 0) {
+        const consulta = consultaDetalhes[0];
+        
+        // Notificação para o paciente
+        if (consulta.paciente?.usuario_id) {
+          await database.run(`
+            INSERT INTO notificacoes (usuario_id, titulo, mensagem, tipo)
+            VALUES (?, ?, ?, ?)
+          `, [
+            consulta.paciente.usuario_id,
+            'Consulta Confirmada',
+            `Sua consulta com ${consulta.medico?.usuario?.nome || 'o médico'} em ${consulta.data} às ${consulta.horario} foi confirmada.`,
+            'success'
+          ]);
+        }
+        
+        // Notificação para o médico
+        if (consulta.medico?.usuario_id) {
+          await database.run(`
+            INSERT INTO notificacoes (usuario_id, titulo, mensagem, tipo)
+            VALUES (?, ?, ?, ?)
+          `, [
+            consulta.medico.usuario_id,
+            'Consulta Confirmada',
+            `A consulta com ${consulta.paciente?.usuario?.nome || 'o paciente'} em ${consulta.data} às ${consulta.horario} foi confirmada.`,
+            'success'
+          ]);
+        }
+      }
+    } catch (notifError) {
+      console.error('⚠️ Erro ao criar notificações de confirmação:', notifError);
+      // Não falhar a requisição se a notificação falhar
+    }
     
     res.json({
       success: true,
-      data: consulta,
+      data: consultaConfirmada,
       message: 'Consulta confirmada com sucesso'
     });
   } catch (error) {
-    console.error('Erro ao confirmar consulta:', error);
+    console.error('❌ Erro ao confirmar consulta:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro interno do servidor';
     res.status(500).json({
       success: false,
@@ -1109,12 +1278,44 @@ app.post('/api/consultas/:id/confirmar', AuthService.authenticateToken, async (r
 });
 
 // Cancelar consulta
-app.post('/api/consultas/:id/cancelar', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
+app.put('/api/consultas/:id/cancelar', async (req: Request, res: Response): Promise<void> => {
   try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
     const id = parseInt(req.params.id);
     const { motivo } = req.body;
     
-    if (!motivo) {
+    if (!motivo || motivo.trim() === '') {
       res.status(400).json({
         success: false,
         error: {
@@ -1125,15 +1326,112 @@ app.post('/api/consultas/:id/cancelar', AuthService.authenticateToken, async (re
       return;
     }
 
-    const consulta = await ConsultaService.cancelar(id, motivo);
+    // Buscar consulta para verificar permissões
+    const consultas = await ConsultaService.listar({ id });
+    if (consultas.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Consulta não encontrada',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    const consulta = consultas[0];
+    
+    // Verificar permissões: paciente, médico ou admin podem cancelar
+    let temPermissao = false;
+    
+    if (usuario.tipo === 'admin') {
+      temPermissao = true;
+    } else if (usuario.tipo === 'paciente') {
+      const paciente = await database.get('SELECT id FROM pacientes WHERE usuario_id = ?', [usuario.id]);
+      if (paciente && consulta.paciente_id === paciente.id) {
+        temPermissao = true;
+      }
+    } else if (usuario.tipo === 'medico') {
+      const medico = await database.get('SELECT id FROM medicos WHERE usuario_id = ?', [usuario.id]);
+      if (medico && consulta.medico_id === medico.id) {
+        temPermissao = true;
+      }
+    }
+    
+    if (!temPermissao) {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Você não tem permissão para cancelar esta consulta',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    // Verificar se a consulta pode ser cancelada
+    if (!['agendada', 'confirmada'].includes(consulta.status)) {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: `Consulta já está ${consulta.status}. Apenas consultas agendadas ou confirmadas podem ser canceladas.`,
+          statusCode: 400
+        }
+      });
+      return;
+    }
+    
+    console.log('❌ Cancelando consulta - ID:', id, 'por usuário:', usuario.email, 'motivo:', motivo);
+    
+    const consultaCancelada = await ConsultaService.cancelar(id, motivo.trim());
+    
+    // Criar notificações para paciente e médico
+    try {
+      // Buscar paciente e médico
+      const consultaDetalhes = await ConsultaService.listar({ id });
+      if (consultaDetalhes.length > 0) {
+        const consulta = consultaDetalhes[0];
+        const motivoFormatado = motivo.trim();
+        const nomeUsuarioCancelou = usuario.nome || 'Usuário';
+        
+        // Notificação para o paciente (se não foi ele que cancelou)
+        if (consulta.paciente?.usuario_id && usuario.tipo !== 'paciente') {
+          await database.run(`
+            INSERT INTO notificacoes (usuario_id, titulo, mensagem, tipo)
+            VALUES (?, ?, ?, ?)
+          `, [
+            consulta.paciente.usuario_id,
+            'Consulta Cancelada',
+            `Sua consulta com ${consulta.medico?.usuario?.nome || 'o médico'} em ${consulta.data} às ${consulta.horario} foi cancelada por ${nomeUsuarioCancelou}. Motivo: ${motivoFormatado}`,
+            'error'
+          ]);
+        }
+        
+        // Notificação para o médico (se não foi ele que cancelou)
+        if (consulta.medico?.usuario_id && usuario.tipo !== 'medico') {
+          await database.run(`
+            INSERT INTO notificacoes (usuario_id, titulo, mensagem, tipo)
+            VALUES (?, ?, ?, ?)
+          `, [
+            consulta.medico.usuario_id,
+            'Consulta Cancelada',
+            `A consulta com ${consulta.paciente?.usuario?.nome || 'o paciente'} em ${consulta.data} às ${consulta.horario} foi cancelada por ${nomeUsuarioCancelou}. Motivo: ${motivoFormatado}`,
+            'error'
+          ]);
+        }
+      }
+    } catch (notifError) {
+      console.error('⚠️ Erro ao criar notificações de cancelamento:', notifError);
+      // Não falhar a requisição se a notificação falhar
+    }
     
     res.json({
       success: true,
-      data: consulta,
+      data: consultaCancelada,
       message: 'Consulta cancelada com sucesso'
     });
   } catch (error) {
-    console.error('Erro ao cancelar consulta:', error);
+    console.error('❌ Erro ao cancelar consulta:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro interno do servidor';
     res.status(500).json({
       success: false,
@@ -1177,23 +1475,1258 @@ app.get('/api/salas', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// ==================== PRONTUÁRIOS ====================
+
+// Listar prontuários
+app.get('/api/prontuarios', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const { paciente_id, consulta_id } = req.query;
+    
+    let sql = `
+      SELECT 
+        pr.*,
+        p.usuario_id as paciente_usuario_id,
+        u_p.nome as paciente_nome,
+        m.usuario_id as medico_usuario_id,
+        u_m.nome as medico_nome,
+        m.especialidade as medico_especialidade,
+        c.data as consulta_data,
+        c.horario as consulta_horario
+      FROM prontuarios pr
+      JOIN pacientes p ON pr.paciente_id = p.id
+      JOIN usuarios u_p ON p.usuario_id = u_p.id
+      JOIN medicos m ON pr.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+      LEFT JOIN consultas c ON pr.consulta_id = c.id
+      WHERE 1=1
+    `;
+    
+    const params: any[] = [];
+    
+    // Médicos só veem prontuários que criaram
+    if (usuario.tipo === 'medico') {
+      const medico = await database.get('SELECT id FROM medicos WHERE usuario_id = ?', [usuario.id]);
+      if (medico) {
+        sql += ' AND pr.medico_id = ?';
+        params.push(medico.id);
+      }
+    }
+    // Pacientes só veem seus próprios prontuários
+    else if (usuario.tipo === 'paciente') {
+      const paciente = await database.get('SELECT id FROM pacientes WHERE usuario_id = ?', [usuario.id]);
+      if (paciente) {
+        sql += ' AND pr.paciente_id = ?';
+        params.push(paciente.id);
+      }
+    }
+    
+    if (paciente_id) {
+      sql += ' AND pr.paciente_id = ?';
+      params.push(paciente_id);
+    }
+    
+    if (consulta_id) {
+      sql += ' AND pr.consulta_id = ?';
+      params.push(consulta_id);
+    }
+    
+    sql += ' ORDER BY pr.data_atendimento DESC, pr.created_at DESC';
+    
+    const prontuarios = await database.all(sql, params);
+    
+    // Formatar dados
+    const prontuariosFormatados = prontuarios.map((pr: any) => ({
+      id: pr.id,
+      paciente_id: pr.paciente_id,
+      medico_id: pr.medico_id,
+      consulta_id: pr.consulta_id,
+      data_atendimento: pr.data_atendimento,
+      paciente: {
+        id: pr.paciente_id,
+        usuario_id: pr.paciente_usuario_id,
+        nome: pr.paciente_nome
+      },
+      medico: {
+        id: pr.medico_id,
+        usuario_id: pr.medico_usuario_id,
+        nome: pr.medico_nome,
+        especialidade: pr.medico_especialidade
+      },
+      consulta: pr.consulta_id ? {
+        id: pr.consulta_id,
+        data: pr.consulta_data,
+        horario: pr.consulta_horario
+      } : null,
+      anamnese: pr.anamnese ? JSON.parse(pr.anamnese) : null,
+      exame_fisico: pr.exame_fisico ? JSON.parse(pr.exame_fisico) : null,
+      diagnostico: pr.diagnostico ? JSON.parse(pr.diagnostico) : null,
+      prescricao: pr.prescricao ? JSON.parse(pr.prescricao) : null,
+      observacoes: pr.observacoes,
+      created_at: pr.created_at,
+      updated_at: pr.updated_at
+    }));
+    
+    res.json({
+      success: true,
+      data: prontuariosFormatados
+    });
+  } catch (error) {
+    console.error('❌ Erro ao listar prontuários:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Buscar prontuário por ID
+app.get('/api/prontuarios/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    try {
+      AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const id = parseInt(req.params.id);
+    
+    const prontuario = await database.get(`
+      SELECT 
+        pr.*,
+        p.usuario_id as paciente_usuario_id,
+        u_p.nome as paciente_nome,
+        u_p.email as paciente_email,
+        m.usuario_id as medico_usuario_id,
+        u_m.nome as medico_nome,
+        m.especialidade as medico_especialidade,
+        c.data as consulta_data,
+        c.horario as consulta_horario
+      FROM prontuarios pr
+      JOIN pacientes p ON pr.paciente_id = p.id
+      JOIN usuarios u_p ON p.usuario_id = u_p.id
+      JOIN medicos m ON pr.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+      LEFT JOIN consultas c ON pr.consulta_id = c.id
+      WHERE pr.id = ?
+    `, [id]);
+    
+    if (!prontuario) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Prontuário não encontrado',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    // Formatar dados
+    const prontuarioFormatado = {
+      id: prontuario.id,
+      paciente_id: prontuario.paciente_id,
+      medico_id: prontuario.medico_id,
+      consulta_id: prontuario.consulta_id,
+      data_atendimento: prontuario.data_atendimento,
+      paciente: {
+        id: prontuario.paciente_id,
+        usuario_id: prontuario.paciente_usuario_id,
+        nome: prontuario.paciente_nome,
+        email: prontuario.paciente_email
+      },
+      medico: {
+        id: prontuario.medico_id,
+        usuario_id: prontuario.medico_usuario_id,
+        nome: prontuario.medico_nome,
+        especialidade: prontuario.medico_especialidade
+      },
+      consulta: prontuario.consulta_id ? {
+        id: prontuario.consulta_id,
+        data: prontuario.consulta_data,
+        horario: prontuario.consulta_horario
+      } : null,
+      anamnese: prontuario.anamnese ? JSON.parse(prontuario.anamnese) : null,
+      exame_fisico: prontuario.exame_fisico ? JSON.parse(prontuario.exame_fisico) : null,
+      diagnostico: prontuario.diagnostico ? JSON.parse(prontuario.diagnostico) : null,
+      prescricao: prontuario.prescricao ? JSON.parse(prontuario.prescricao) : null,
+      observacoes: prontuario.observacoes,
+      created_at: prontuario.created_at,
+      updated_at: prontuario.updated_at
+    };
+    
+    res.json({
+      success: true,
+      data: prontuarioFormatado
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar prontuário:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Buscar prontuário por consulta
+app.get('/api/prontuarios/consulta/:consulta_id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    try {
+      AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const consulta_id = parseInt(req.params.consulta_id);
+    
+    const prontuario = await database.get(`
+      SELECT * FROM prontuarios WHERE consulta_id = ?
+    `, [consulta_id]);
+    
+    if (!prontuario) {
+      res.json({
+        success: true,
+        data: []
+      });
+      return;
+    }
+    
+    // Usar o mesmo formato do GET /api/prontuarios/:id
+    const prontuarioCompleto = await database.get(`
+      SELECT 
+        pr.*,
+        p.usuario_id as paciente_usuario_id,
+        u_p.nome as paciente_nome,
+        u_p.email as paciente_email,
+        m.usuario_id as medico_usuario_id,
+        u_m.nome as medico_nome,
+        m.especialidade as medico_especialidade,
+        c.data as consulta_data,
+        c.horario as consulta_horario
+      FROM prontuarios pr
+      JOIN pacientes p ON pr.paciente_id = p.id
+      JOIN usuarios u_p ON p.usuario_id = u_p.id
+      JOIN medicos m ON pr.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+      LEFT JOIN consultas c ON pr.consulta_id = c.id
+      WHERE pr.id = ?
+    `, [prontuario.id]);
+    
+    const prontuarioFormatado = {
+      id: prontuarioCompleto.id,
+      paciente_id: prontuarioCompleto.paciente_id,
+      medico_id: prontuarioCompleto.medico_id,
+      consulta_id: prontuarioCompleto.consulta_id,
+      data_atendimento: prontuarioCompleto.data_atendimento,
+      paciente: {
+        id: prontuarioCompleto.paciente_id,
+        usuario_id: prontuarioCompleto.paciente_usuario_id,
+        nome: prontuarioCompleto.paciente_nome,
+        email: prontuarioCompleto.paciente_email
+      },
+      medico: {
+        id: prontuarioCompleto.medico_id,
+        usuario_id: prontuarioCompleto.medico_usuario_id,
+        nome: prontuarioCompleto.medico_nome,
+        especialidade: prontuarioCompleto.medico_especialidade
+      },
+      consulta: prontuarioCompleto.consulta_id ? {
+        id: prontuarioCompleto.consulta_id,
+        data: prontuarioCompleto.consulta_data,
+        horario: prontuarioCompleto.consulta_horario
+      } : null,
+      anamnese: prontuarioCompleto.anamnese ? JSON.parse(prontuarioCompleto.anamnese) : null,
+      exame_fisico: prontuarioCompleto.exame_fisico ? JSON.parse(prontuarioCompleto.exame_fisico) : null,
+      diagnostico: prontuarioCompleto.diagnostico ? JSON.parse(prontuarioCompleto.diagnostico) : null,
+      prescricao: prontuarioCompleto.prescricao ? JSON.parse(prontuarioCompleto.prescricao) : null,
+      observacoes: prontuarioCompleto.observacoes,
+      created_at: prontuarioCompleto.created_at,
+      updated_at: prontuarioCompleto.updated_at
+    };
+    
+    res.json({
+      success: true,
+      data: [prontuarioFormatado]
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar prontuário por consulta:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Criar prontuário
+app.post('/api/prontuarios', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    // Apenas médicos podem criar prontuários
+    if (usuario.tipo !== 'medico' && usuario.tipo !== 'admin') {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Apenas médicos podem criar prontuários',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    const { paciente_id, medico_id, consulta_id, data_atendimento, anamnese, exame_fisico, diagnostico, prescricao, observacoes } = req.body;
+    
+    if (!paciente_id || !medico_id || !data_atendimento) {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: 'Paciente, médico e data de atendimento são obrigatórios',
+          statusCode: 400
+        }
+      });
+      return;
+    }
+    
+    // Se for médico, garantir que está criando prontuário para si mesmo
+    if (usuario.tipo === 'medico') {
+      const medico = await database.get('SELECT id FROM medicos WHERE usuario_id = ?', [usuario.id]);
+      if (!medico || medico.id !== medico_id) {
+        res.status(403).json({
+          success: false,
+          error: {
+            message: 'Você só pode criar prontuários para suas próprias consultas',
+            statusCode: 403
+          }
+        });
+        return;
+      }
+    }
+    
+    // Verificar se já existe prontuário para esta consulta
+    if (consulta_id) {
+      const prontuarioExistente = await database.get(
+        'SELECT id FROM prontuarios WHERE consulta_id = ?',
+        [consulta_id]
+      );
+      
+      if (prontuarioExistente) {
+        res.status(409).json({
+          success: false,
+          error: {
+            message: 'Já existe um prontuário para esta consulta',
+            statusCode: 409
+          }
+        });
+        return;
+      }
+    }
+    
+    console.log('📝 Criando prontuário:', { paciente_id, medico_id, consulta_id });
+    
+    const result = await database.run(`
+      INSERT INTO prontuarios (
+        paciente_id, medico_id, consulta_id, data_atendimento,
+        anamnese, exame_fisico, diagnostico, prescricao, observacoes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      paciente_id,
+      medico_id,
+      consulta_id || null,
+      data_atendimento,
+      anamnese ? JSON.stringify(anamnese) : null,
+      exame_fisico ? JSON.stringify(exame_fisico) : null,
+      diagnostico ? JSON.stringify(diagnostico) : null,
+      prescricao ? JSON.stringify(prescricao) : null,
+      observacoes || null
+    ]);
+    
+    // Buscar prontuário criado
+    const prontuarioCriado = await database.get(`
+      SELECT 
+        pr.*,
+        p.usuario_id as paciente_usuario_id,
+        u_p.nome as paciente_nome,
+        m.usuario_id as medico_usuario_id,
+        u_m.nome as medico_nome,
+        m.especialidade as medico_especialidade
+      FROM prontuarios pr
+      JOIN pacientes p ON pr.paciente_id = p.id
+      JOIN usuarios u_p ON p.usuario_id = u_p.id
+      JOIN medicos m ON pr.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+      WHERE pr.id = ?
+    `, [result.lastID]);
+    
+    const prontuarioFormatado = {
+      id: prontuarioCriado.id,
+      paciente_id: prontuarioCriado.paciente_id,
+      medico_id: prontuarioCriado.medico_id,
+      consulta_id: prontuarioCriado.consulta_id,
+      data_atendimento: prontuarioCriado.data_atendimento,
+      paciente: {
+        id: prontuarioCriado.paciente_id,
+        usuario_id: prontuarioCriado.paciente_usuario_id,
+        nome: prontuarioCriado.paciente_nome
+      },
+      medico: {
+        id: prontuarioCriado.medico_id,
+        usuario_id: prontuarioCriado.medico_usuario_id,
+        nome: prontuarioCriado.medico_nome,
+        especialidade: prontuarioCriado.medico_especialidade
+      },
+      anamnese: prontuarioCriado.anamnese ? JSON.parse(prontuarioCriado.anamnese) : null,
+      exame_fisico: prontuarioCriado.exame_fisico ? JSON.parse(prontuarioCriado.exame_fisico) : null,
+      diagnostico: prontuarioCriado.diagnostico ? JSON.parse(prontuarioCriado.diagnostico) : null,
+      prescricao: prontuarioCriado.prescricao ? JSON.parse(prontuarioCriado.prescricao) : null,
+      observacoes: prontuarioCriado.observacoes,
+      created_at: prontuarioCriado.created_at,
+      updated_at: prontuarioCriado.updated_at
+    };
+    
+    console.log('✅ Prontuário criado com sucesso - ID:', result.lastID);
+    
+    res.status(201).json({
+      success: true,
+      data: prontuarioFormatado,
+      message: 'Prontuário criado com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao criar prontuário:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Atualizar prontuário
+app.put('/api/prontuarios/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const id = parseInt(req.params.id);
+    const { anamnese, exame_fisico, diagnostico, prescricao, observacoes } = req.body;
+    
+    // Verificar se prontuário existe
+    const prontuarioExistente = await database.get('SELECT * FROM prontuarios WHERE id = ?', [id]);
+    if (!prontuarioExistente) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Prontuário não encontrado',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    // Médicos só podem editar seus próprios prontuários
+    if (usuario.tipo === 'medico') {
+      const medico = await database.get('SELECT id FROM medicos WHERE usuario_id = ?', [usuario.id]);
+      if (!medico || medico.id !== prontuarioExistente.medico_id) {
+        res.status(403).json({
+          success: false,
+          error: {
+            message: 'Você só pode editar seus próprios prontuários',
+            statusCode: 403
+          }
+        });
+        return;
+      }
+    }
+    
+    // Atualizar prontuário
+    await database.run(`
+      UPDATE prontuarios 
+      SET 
+        anamnese = ?,
+        exame_fisico = ?,
+        diagnostico = ?,
+        prescricao = ?,
+        observacoes = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [
+      anamnese ? JSON.stringify(anamnese) : prontuarioExistente.anamnese,
+      exame_fisico ? JSON.stringify(exame_fisico) : prontuarioExistente.exame_fisico,
+      diagnostico ? JSON.stringify(diagnostico) : prontuarioExistente.diagnostico,
+      prescricao ? JSON.stringify(prescricao) : prontuarioExistente.prescricao,
+      observacoes !== undefined ? observacoes : prontuarioExistente.observacoes,
+      id
+    ]);
+    
+    // Buscar prontuário atualizado
+    const prontuarioAtualizado = await database.get(`
+      SELECT 
+        pr.*,
+        p.usuario_id as paciente_usuario_id,
+        u_p.nome as paciente_nome,
+        m.usuario_id as medico_usuario_id,
+        u_m.nome as medico_nome,
+        m.especialidade as medico_especialidade
+      FROM prontuarios pr
+      JOIN pacientes p ON pr.paciente_id = p.id
+      JOIN usuarios u_p ON p.usuario_id = u_p.id
+      JOIN medicos m ON pr.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+      WHERE pr.id = ?
+    `, [id]);
+    
+    const prontuarioFormatado = {
+      id: prontuarioAtualizado.id,
+      paciente_id: prontuarioAtualizado.paciente_id,
+      medico_id: prontuarioAtualizado.medico_id,
+      consulta_id: prontuarioAtualizado.consulta_id,
+      data_atendimento: prontuarioAtualizado.data_atendimento,
+      paciente: {
+        id: prontuarioAtualizado.paciente_id,
+        usuario_id: prontuarioAtualizado.paciente_usuario_id,
+        nome: prontuarioAtualizado.paciente_nome
+      },
+      medico: {
+        id: prontuarioAtualizado.medico_id,
+        usuario_id: prontuarioAtualizado.medico_usuario_id,
+        nome: prontuarioAtualizado.medico_nome,
+        especialidade: prontuarioAtualizado.medico_especialidade
+      },
+      anamnese: prontuarioAtualizado.anamnese ? JSON.parse(prontuarioAtualizado.anamnese) : null,
+      exame_fisico: prontuarioAtualizado.exame_fisico ? JSON.parse(prontuarioAtualizado.exame_fisico) : null,
+      diagnostico: prontuarioAtualizado.diagnostico ? JSON.parse(prontuarioAtualizado.diagnostico) : null,
+      prescricao: prontuarioAtualizado.prescricao ? JSON.parse(prontuarioAtualizado.prescricao) : null,
+      observacoes: prontuarioAtualizado.observacoes,
+      created_at: prontuarioAtualizado.created_at,
+      updated_at: prontuarioAtualizado.updated_at
+    };
+    
+    console.log('✅ Prontuário atualizado com sucesso - ID:', id);
+    
+    res.json({
+      success: true,
+      data: prontuarioFormatado,
+      message: 'Prontuário atualizado com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao atualizar prontuário:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// ==================== GESTÃO FINANCEIRA ====================
+
+// Listar pagamentos
+app.get('/api/pagamentos', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    console.log('💰 Listando pagamentos para usuário:', usuario.email);
+    
+    let query = `
+      SELECT p.*, c.data, c.hora_inicio, c.hora_fim, c.tipo_consulta,
+             u_p.nome as paciente_nome, u_m.nome as medico_nome
+      FROM pagamentos p
+      JOIN consultas c ON p.consulta_id = c.id
+      JOIN usuarios u_p ON c.paciente_id = u_p.id
+      JOIN medicos m ON c.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+    `;
+    
+    const params: any[] = [];
+    
+    // Filtrar por tipo de usuário
+    if (usuario.tipo === 'paciente') {
+      query += ' WHERE c.paciente_id = ?';
+      params.push(usuario.id);
+    } else if (usuario.tipo === 'medico') {
+      query += ' WHERE c.medico_id = (SELECT id FROM medicos WHERE usuario_id = ?)';
+      params.push(usuario.id);
+    }
+    // Admin vê todos
+    
+    query += ' ORDER BY p.created_at DESC';
+    
+    const pagamentos = await database.all(query, params);
+    
+    console.log(`✅ ${pagamentos.length} pagamentos encontrados`);
+    
+    res.json({
+      success: true,
+      data: pagamentos
+    });
+  } catch (error) {
+    console.error('❌ Erro ao listar pagamentos:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Criar pagamento
+app.post('/api/pagamentos', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const { consulta_id, valor, forma_pagamento, observacoes } = req.body;
+    
+    // Verificar se a consulta existe e pertence ao usuário
+    const consulta = await database.get(`
+      SELECT c.*, u_p.nome as paciente_nome, u_m.nome as medico_nome
+      FROM consultas c
+      JOIN usuarios u_p ON c.paciente_id = u_p.id
+      JOIN medicos m ON c.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+      WHERE c.id = ?
+    `, [consulta_id]);
+    
+    if (!consulta) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Consulta não encontrada',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    // Verificar permissões
+    if (usuario.tipo === 'paciente' && consulta.paciente_id !== usuario.id) {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Você só pode criar pagamentos para suas próprias consultas',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    // Verificar se já existe pagamento para esta consulta
+    const pagamentoExistente = await database.get(
+      'SELECT * FROM pagamentos WHERE consulta_id = ?',
+      [consulta_id]
+    );
+    
+    if (pagamentoExistente) {
+      res.status(409).json({
+        success: false,
+        error: {
+          message: 'Já existe um pagamento para esta consulta',
+          statusCode: 409
+        }
+      });
+      return;
+    }
+    
+    // Calcular data de vencimento (30 dias por padrão)
+    const diasVencimento = 30;
+    const dataVencimento = new Date();
+    dataVencimento.setDate(dataVencimento.getDate() + diasVencimento);
+    
+    const result = await database.run(`
+      INSERT INTO pagamentos (consulta_id, valor, forma_pagamento, data_vencimento, observacoes)
+      VALUES (?, ?, ?, ?, ?)
+    `, [consulta_id, valor, forma_pagamento, dataVencimento.toISOString().split('T')[0], observacoes]);
+    
+    console.log('✅ Pagamento criado - ID:', result.lastID, 'para consulta:', consulta_id);
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id: result.lastID,
+        consulta_id,
+        valor,
+        forma_pagamento,
+        status: 'pendente',
+        data_vencimento: dataVencimento.toISOString().split('T')[0],
+        observacoes
+      },
+      message: 'Pagamento criado com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao criar pagamento:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Confirmar pagamento
+app.put('/api/pagamentos/:id/confirmar', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const id = parseInt(req.params.id);
+    
+    // Verificar se o pagamento existe
+    const pagamento = await database.get('SELECT * FROM pagamentos WHERE id = ?', [id]);
+    if (!pagamento) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Pagamento não encontrado',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    // Apenas admin pode confirmar pagamentos
+    if (usuario.tipo !== 'admin') {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Apenas administradores podem confirmar pagamentos',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    // Atualizar status do pagamento
+    await database.run(`
+      UPDATE pagamentos 
+      SET status = 'pago', data_pagamento = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [id]);
+    
+    // Atualizar status da consulta para 'realizada' se necessário
+    await database.run(`
+      UPDATE consultas 
+      SET status = 'realizada'
+      WHERE id = ? AND status = 'confirmada'
+    `, [pagamento.consulta_id]);
+    
+    console.log('✅ Pagamento confirmado - ID:', id);
+    
+    res.json({
+      success: true,
+      message: 'Pagamento confirmado com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao confirmar pagamento:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Listar faturas
+app.get('/api/faturas', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    console.log('📄 Listando faturas para usuário:', usuario.email);
+    
+    let query = `
+      SELECT f.*, c.data, c.hora_inicio, c.hora_fim, c.tipo_consulta,
+             u_p.nome as paciente_nome, u_m.nome as medico_nome
+      FROM faturas f
+      JOIN consultas c ON f.consulta_id = c.id
+      JOIN usuarios u_p ON f.paciente_id = u_p.id
+      JOIN medicos m ON f.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+    `;
+    
+    const params: any[] = [];
+    
+    // Filtrar por tipo de usuário
+    if (usuario.tipo === 'paciente') {
+      query += ' WHERE f.paciente_id = ?';
+      params.push(usuario.id);
+    } else if (usuario.tipo === 'medico') {
+      query += ' WHERE f.medico_id = (SELECT id FROM medicos WHERE usuario_id = ?)';
+      params.push(usuario.id);
+    }
+    // Admin vê todas
+    
+    query += ' ORDER BY f.created_at DESC';
+    
+    const faturas = await database.all(query, params);
+    
+    console.log(`✅ ${faturas.length} faturas encontradas`);
+    
+    res.json({
+      success: true,
+      data: faturas
+    });
+  } catch (error) {
+    console.error('❌ Erro ao listar faturas:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Gerar fatura para consulta
+app.post('/api/faturas', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    // Apenas admin pode gerar faturas
+    if (usuario.tipo !== 'admin') {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Apenas administradores podem gerar faturas',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    const { consulta_id, valor_desconto = 0, observacoes } = req.body;
+    
+    // Buscar dados da consulta
+    const consulta = await database.get(`
+      SELECT c.*, u_p.nome as paciente_nome, u_m.nome as medico_nome, m.especialidade
+      FROM consultas c
+      JOIN usuarios u_p ON c.paciente_id = u_p.id
+      JOIN medicos m ON c.medico_id = m.id
+      JOIN usuarios u_m ON m.usuario_id = u_m.id
+      WHERE c.id = ?
+    `, [consulta_id]);
+    
+    if (!consulta) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Consulta não encontrada',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    // Verificar se já existe fatura para esta consulta
+    const faturaExistente = await database.get(
+      'SELECT * FROM faturas WHERE consulta_id = ?',
+      [consulta_id]
+    );
+    
+    if (faturaExistente) {
+      res.status(409).json({
+        success: false,
+        error: {
+          message: 'Já existe uma fatura para esta consulta',
+          statusCode: 409
+        }
+      });
+      return;
+    }
+    
+    const valorTotal = consulta.preco || 0;
+    const valorFinal = valorTotal - valor_desconto;
+    
+    // Calcular data de vencimento
+    const diasVencimento = 30;
+    const dataVencimento = new Date();
+    dataVencimento.setDate(dataVencimento.getDate() + diasVencimento);
+    
+    const result = await database.run(`
+      INSERT INTO faturas (consulta_id, paciente_id, medico_id, valor_total, valor_desconto, valor_final, data_vencimento, observacoes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      consulta_id,
+      consulta.paciente_id,
+      consulta.medico_id,
+      valorTotal,
+      valor_desconto,
+      valorFinal,
+      dataVencimento.toISOString().split('T')[0],
+      observacoes
+    ]);
+    
+    console.log('✅ Fatura gerada - ID:', result.lastID, 'para consulta:', consulta_id);
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id: result.lastID,
+        consulta_id,
+        paciente_id: consulta.paciente_id,
+        medico_id: consulta.medico_id,
+        valor_total: valorTotal,
+        valor_desconto,
+        valor_final: valorFinal,
+        status: 'pendente',
+        data_emissao: new Date().toISOString().split('T')[0],
+        data_vencimento: dataVencimento.toISOString().split('T')[0],
+        observacoes
+      },
+      message: 'Fatura gerada com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao gerar fatura:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
 // ==================== NOTIFICAÇÕES ====================
 
 // Listar notificações
-app.get('/api/notificacoes', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
+app.get('/api/notificacoes', async (req: Request, res: Response): Promise<void> => {
   try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    console.log('📬 Listando notificações do usuário:', usuario.email);
+    
     const notificacoes = await database.all(`
       SELECT * FROM notificacoes 
       WHERE usuario_id = ? 
       ORDER BY created_at DESC
-    `, [req.usuario?.id]);
+    `, [usuario.id]);
+
+    console.log(`✅ ${notificacoes.length} notificações encontradas`);
 
     res.json({
       success: true,
       data: notificacoes
     });
   } catch (error) {
-    console.error('Erro ao listar notificações:', error);
+    console.error('❌ Erro ao listar notificações:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -1205,22 +2738,132 @@ app.get('/api/notificacoes', AuthService.authenticateToken, async (req: Request,
 });
 
 // Marcar notificação como lida
-app.patch('/api/notificacoes/:id/lida', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
+app.put('/api/notificacoes/:id/lida', async (req: Request, res: Response): Promise<void> => {
   try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
     const id = parseInt(req.params.id);
+    
+    // Verificar se a notificação pertence ao usuário
+    const notificacao = await database.get(
+      'SELECT * FROM notificacoes WHERE id = ? AND usuario_id = ?',
+      [id, usuario.id]
+    );
+    
+    if (!notificacao) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Notificação não encontrada',
+          statusCode: 404
+        }
+      });
+      return;
+    }
     
     await database.run(`
       UPDATE notificacoes 
       SET lida = 1 
       WHERE id = ? AND usuario_id = ?
-    `, [id, req.usuario?.id]);
+    `, [id, usuario.id]);
+
+    console.log('✅ Notificação marcada como lida - ID:', id);
 
     res.json({
       success: true,
       message: 'Notificação marcada como lida'
     });
   } catch (error) {
-    console.error('Erro ao marcar notificação como lida:', error);
+    console.error('❌ Erro ao marcar notificação como lida:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Marcar todas as notificações como lidas
+app.put('/api/notificacoes/marcar-todas-lidas', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    await database.run(`
+      UPDATE notificacoes 
+      SET lida = 1 
+      WHERE usuario_id = ? AND lida = 0
+    `, [usuario.id]);
+
+    console.log('✅ Todas as notificações marcadas como lidas para usuário:', usuario.email);
+    
+    res.json({
+      success: true,
+      message: 'Todas as notificações foram marcadas como lidas'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao marcar todas as notificações como lidas:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -1232,19 +2875,51 @@ app.patch('/api/notificacoes/:id/lida', AuthService.authenticateToken, async (re
 });
 
 // Contar notificações não lidas
-app.get('/api/notificacoes/nao-lidas', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
+app.get('/api/notificacoes/nao-lidas', async (req: Request, res: Response): Promise<void> => {
   try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
     const count = await database.get(`
       SELECT COUNT(*) as count FROM notificacoes 
       WHERE usuario_id = ? AND lida = 0
-    `, [req.usuario?.id]);
+    `, [usuario.id]);
 
   res.json({
       success: true,
       data: { count: count.count }
     });
   } catch (error) {
-    console.error('Erro ao contar notificações não lidas:', error);
+    console.error('❌ Erro ao contar notificações não lidas:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -1285,8 +2960,8 @@ async function startServer(): Promise<void> {
     await database.connect();
     await database.initialize();
 
-// Iniciar servidor
-app.listen(PORT, () => {
+    // Iniciar servidor
+    app.listen(PORT, () => {
       console.log('🚀 Servidor rodando na porta', PORT);
       console.log('📚 Ambiente: production (banco de dados real)');
       console.log('🔗 URL: http://localhost:' + PORT);

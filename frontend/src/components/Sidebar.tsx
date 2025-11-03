@@ -12,7 +12,8 @@ import {
   BarChart3,
   Shield,
   FileText,
-  X
+  X,
+  DollarSign
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -54,6 +55,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
       label: 'Prontuário',
       path: '/prontuario',
       roles: ['medico', 'admin']
+    },
+    {
+      icon: DollarSign,
+      label: 'Financeiro',
+      path: '/financeiro',
+      roles: ['paciente', 'medico', 'admin']
     },
     {
       icon: Bell,

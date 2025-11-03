@@ -1,8 +1,8 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import toast from 'react-hot-toast';
 
-// Configuração base da API - FORÇADA para porta 3001
-const API_BASE_URL = 'http://localhost:3001/api';
+// Configuração base da API - FORÇADA para porta 54112
+const API_BASE_URL = 'http://localhost:54112/api';
 
 // Log da configuração para debug
 console.log('🔗 API Base URL:', API_BASE_URL);
@@ -304,12 +304,12 @@ export const consultaService = {
   },
 
   async cancelar(id: number, motivo?: string) {
-    const response = await api.post(`/consultas/${id}/cancelar`, { motivo });
+    const response = await api.put(`/consultas/${id}/cancelar`, { motivo });
     return response.data;
   },
 
   async confirmar(id: number) {
-    const response = await api.post(`/consultas/${id}/confirmar`);
+    const response = await api.put(`/consultas/${id}/confirmar`);
     return response.data;
   },
 
@@ -395,7 +395,7 @@ export const notificacaoService = {
   },
 
   async marcarComoLida(id: number) {
-    const response = await api.put(`/notificacoes/${id}/marcar-lida`);
+    const response = await api.put(`/notificacoes/${id}/lida`);
     return response.data;
   },
 
@@ -423,6 +423,54 @@ export const notificacaoService = {
     const response = await api.post('/notificacoes/enviar-massa', dados);
     return response.data;
   },
+};
+
+// Serviços financeiros
+export const pagamentoService = {
+  async listar(params?: any) {
+    const response = await api.get('/pagamentos', { params });
+    return response.data;
+  },
+
+  async criar(dados: any) {
+    const response = await api.post('/pagamentos', dados);
+    return response.data;
+  },
+
+  async confirmar(id: number) {
+    const response = await api.put(`/pagamentos/${id}/confirmar`);
+    return response.data;
+  },
+
+  async buscarPorId(id: number) {
+    const response = await api.get(`/pagamentos/${id}`);
+    return response.data;
+  }
+};
+
+export const faturaService = {
+  async listar(params?: any) {
+    const response = await api.get('/faturas', { params });
+    return response.data;
+  },
+
+  async criar(dados: any) {
+    const response = await api.post('/faturas', dados);
+    return response.data;
+  },
+
+  async buscarPorId(id: number) {
+    const response = await api.get(`/faturas/${id}`);
+    return response.data;
+  },
+
+  async gerarParaConsulta(consultaId: number, dados?: any) {
+    const response = await api.post('/faturas', {
+      consulta_id: consultaId,
+      ...dados
+    });
+    return response.data;
+  }
 };
 
 // Serviços de configurações
@@ -494,9 +542,7 @@ export const prontuarioService = {
   },
 
   async buscarPorConsulta(consultaId: number) {
-    const response = await api.get('/prontuarios', { 
-      params: { consulta_id: consultaId } 
-    });
+    const response = await api.get(`/prontuarios/consulta/${consultaId}`);
     return response.data;
   }
 };

@@ -10,10 +10,12 @@ import {
   XCircle,
   Eye,
   Filter,
-  Search
+  Search,
+  FileText,
+  DollarSign
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { consultaService } from '../services/api';
+import { consultaService, pagamentoService, faturaService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Consulta {
@@ -94,7 +96,7 @@ const Consultas: React.FC = () => {
 
   // Mutação para cancelar consulta
   const cancelarConsultaMutation = useMutation(
-    (id: number) => consultaService.cancelar(id, 'Cancelado pelo paciente'),
+    ({ id, motivo }: { id: number; motivo: string }) => consultaService.cancelar(id, motivo),
     {
       onSuccess: () => {
         toast.success('Consulta cancelada com sucesso!');
@@ -129,14 +131,41 @@ const Consultas: React.FC = () => {
   };
 
   const handleCancelar = (id: number) => {
-    if (window.confirm('Tem certeza que deseja cancelar esta consulta?')) {
-      cancelarConsultaMutation.mutate(id);
+    const motivo = prompt('Por favor, informe o motivo do cancelamento:');
+    
+    if (!motivo || motivo.trim() === '') {
+      toast.error('O motivo do cancelamento é obrigatório');
+      return;
+    }
+    
+    if (window.confirm(`Tem certeza que deseja cancelar esta consulta?\n\nMotivo: ${motivo}`)) {
+      cancelarConsultaMutation.mutate({ id, motivo: motivo.trim() });
     }
   };
 
   const handleConfirmar = (id: number) => {
     if (window.confirm('Confirmar esta consulta?')) {
       confirmarConsultaMutation.mutate(id);
+    }
+  };
+
+  const handleGerarFatura = (consulta: Consulta) => {
+    const valorDesconto = prompt('Valor de desconto (opcional):') || '0';
+    const observacoes = prompt('Observações (opcional):') || '';
+    
+    // Implementar geração de fatura
+    toast.success('Funcionalidade de geração de fatura será implementada em breve!');
+  };
+
+  const handleCriarPagamento = (consulta: Consulta) => {
+    const valor = prompt('Valor do pagamento:');
+    const formaPagamento = prompt('Forma de pagamento (dinheiro, cartao_credito, cartao_debito, pix, transferencia):');
+    
+    if (valor && formaPagamento) {
+      // Implementar criação de pagamento
+      toast.success('Funcionalidade de criação de pagamento será implementada em breve!');
+    } else if (valor !== null) {
+      toast.error('Valor e forma de pagamento são obrigatórios');
     }
   };
 
@@ -425,6 +454,31 @@ const Consultas: React.FC = () => {
                       >
                         <XCircle className="w-4 h-4" />
                       </button>
+                    )}
+
+                    {usuario?.tipo === 'admin' && consulta.status === 'confirmada' && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleGerarFatura(consulta);
+                          }}
+                          className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Gerar fatura"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCriarPagamento(consulta);
+                          }}
+                          className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                          title="Criar pagamento"
+                        >
+                          <DollarSign className="w-4 h-4" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

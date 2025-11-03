@@ -131,6 +131,84 @@ export interface LogAgendamento {
   created_at: Date;
 }
 
+// ==================== TIPOS FINANCEIROS ====================
+
+export interface Pagamento {
+  id: number;
+  consulta_id: number;
+  valor: number;
+  forma_pagamento: string;
+  status: 'pendente' | 'pago' | 'cancelado' | 'reembolsado';
+  data_pagamento?: Date;
+  data_vencimento?: Date;
+  observacoes?: string;
+  comprovante_url?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Fatura {
+  id: number;
+  numero_fatura: string;
+  consulta_id: number;
+  paciente_id: number;
+  medico_id: number;
+  valor_total: number;
+  valor_desconto: number;
+  valor_final: number;
+  status: 'pendente' | 'paga' | 'cancelada' | 'vencida';
+  data_emissao: Date;
+  data_vencimento?: Date;
+  data_pagamento?: Date;
+  observacoes?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Despesa {
+  id: number;
+  descricao: string;
+  categoria: string;
+  valor: number;
+  data_vencimento?: Date;
+  data_pagamento?: Date;
+  status: 'pendente' | 'pago' | 'cancelado';
+  forma_pagamento?: string;
+  observacoes?: string;
+  comprovante_url?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Comissao {
+  id: number;
+  medico_id: number;
+  consulta_id: number;
+  valor_consulta: number;
+  percentual_comissao: number;
+  valor_comissao: number;
+  status: 'pendente' | 'pago' | 'cancelado';
+  data_pagamento?: Date;
+  observacoes?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface RelatorioFinanceiro {
+  id: number;
+  tipo: 'mensal' | 'semanal' | 'diario' | 'anual';
+  periodo_inicio: Date;
+  periodo_fim: Date;
+  receita_total: number;
+  despesa_total: number;
+  lucro_liquido: number;
+  total_consultas: number;
+  total_pagamentos: number;
+  dados_detalhados?: any;
+  created_at: Date;
+  updated_at: Date;
+}
+
 // Tipos para requisições
 export interface LoginRequest {
   email: string;

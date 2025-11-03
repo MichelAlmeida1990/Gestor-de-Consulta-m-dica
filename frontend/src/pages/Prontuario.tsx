@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useForm } from 'react-hook-form';
 import { 
   FileText, 
   User, 
@@ -119,6 +120,10 @@ const Prontuario: React.FC = () => {
   const [consultaSelecionada, setConsultaSelecionada] = useState<Consulta | null>(null);
   const [abaAtiva, setAbaAtiva] = useState('anamnese');
   const [modoTelaCheia, setModoTelaCheia] = useState(false);
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const queryClient = useQueryClient();
+  
+  const { register: registerForm, handleSubmit: handleSubmitForm, setValue, watch, formState: { errors } } = useForm();
 
   // Buscar pacientes da API
   const { data: pacientesData, isLoading: carregandoPacientes, error: pacientesError } = useQuery(
@@ -177,17 +182,79 @@ const Prontuario: React.FC = () => {
     : [];
 
   // Buscar prontuário específico da consulta selecionada
-  const { data: prontuarioAtual } = useQuery(
+  const { data: prontuarioData, refetch: refetchProntuario } = useQuery(
     ['prontuario-consulta', consultaSelecionada?.id],
     () => prontuarioService.buscarPorConsulta(consultaSelecionada!.id),
     { 
-      enabled: !!consultaSelecionada,
-      select: (data) => data.data?.[0] || null
+      enabled: !!consultaSelecionada?.id,
+      select: (data) => {
+        const prontuario = data.data?.[0] || null;
+        if (prontuario && modoEdicao) {
+          // Preencher formulário quando entrar em modo edição
+          setTimeout(() => {
+            if (prontuario.anamnese) {
+              Object.keys(prontuario.anamnese).forEach(key => {
+                setValue(`anamnese.${key}`, prontuario.anamnese[key]);
+              });
+            }
+            if (prontuario.exame_fisico) {
+              Object.keys(prontuario.exame_fisico).forEach(key => {
+                setValue(`exame_fisico.${key}`, prontuario.exame_fisico[key]);
+              });
+            }
+            if (prontuario.diagnostico) {
+              Object.keys(prontuario.diagnostico).forEach(key => {
+                setValue(`diagnostico.${key}`, prontuario.diagnostico[key]);
+              });
+            }
+            if (prontuario.prescricao) {
+              Object.keys(prontuario.prescricao).forEach(key => {
+                setValue(`prescricao.${key}`, prontuario.prescricao[key]);
+              });
+            }
+            setValue('observacoes', prontuario.observacoes || '');
+          }, 100);
+        }
+        return prontuario;
+      }
     }
   );
 
+  const prontuarioAtual = prontuarioData || null;
+
   // Mutação para criar prontuário
-  // Mutations removidas - não utilizadas
+  const criarProntuarioMutation = useMutation(
+    (dados: any) => prontuarioService.criar(dados),
+    {
+      onSuccess: () => {
+        toast.success('Prontuário criado com sucesso!');
+        queryClient.invalidateQueries(['prontuario-consulta', consultaSelecionada?.id]);
+        queryClient.invalidateQueries('consultas-prontuario');
+        setModoEdicao(false);
+        refetchProntuario();
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.error?.message || 'Erro ao criar prontuário');
+      }
+    }
+  );
+
+  // Mutação para atualizar prontuário
+  const atualizarProntuarioMutation = useMutation(
+    ({ id, dados }: { id: number; dados: any }) => prontuarioService.atualizar(id, dados),
+    {
+      onSuccess: () => {
+        toast.success('Prontuário atualizado com sucesso!');
+        queryClient.invalidateQueries(['prontuario-consulta', consultaSelecionada?.id]);
+        queryClient.invalidateQueries('consultas-prontuario');
+        setModoEdicao(false);
+        refetchProntuario();
+      },
+      onError: (error: any) => {
+        toast.error(error.response?.data?.error?.message || 'Erro ao atualizar prontuário');
+      }
+    }
+  );
 
   const handleSelecionarPaciente = (paciente: Paciente) => {
     console.log('👤 Paciente selecionado:', paciente);
@@ -224,7 +291,99 @@ const Prontuario: React.FC = () => {
       toast.error('Selecione uma consulta primeiro');
       return;
     }
-    // Função removida - não implementada
+    setModoEdicao(true);
+    
+    // Se já existe prontuário, preencher com dados existentes
+    if (prontuarioAtual) {
+      // Preencher será feito pelo select no useQuery
+      return;
+    }
+    
+    // Limpar formulário para novo prontuário
+    setTimeout(() => {
+      setValue('anamnese.motivoConsulta', '');
+      setValue('anamnese.historiaDoenca', '');
+      setValue('anamnese.antecedentesFamiliares', '');
+      setValue('anamnese.habitos.fuma', false);
+      setValue('anamnese.habitos.bebe', false);
+      setValue('exame_fisico.pressaoArterial', '');
+      setValue('exame_fisico.frequenciaCardiaca', '');
+      setValue('exame_fisico.temperatura', '');
+      setValue('exame_fisico.peso', '');
+      setValue('exame_fisico.altura', '');
+      setValue('exame_fisico.imc', '');
+      setValue('exame_fisico.observacoes', '');
+      setValue('diagnostico.principal', '');
+      setValue('diagnostico.cid', '');
+      setValue('prescricao.orientacoes', '');
+      setValue('observacoes', '');
+    }, 100);
+  };
+
+  const onSubmitProntuario = (dados: any) => {
+    if (!consultaSelecionada || !pacienteSelecionado) {
+      toast.error('Selecione uma consulta e paciente');
+      return;
+    }
+
+    // Buscar ID do médico da consulta
+    const medicoId = consultaSelecionada.medico?.id;
+    if (!medicoId) {
+      toast.error('Médico não encontrado na consulta');
+      return;
+    }
+
+    const dadosProntuario = {
+      paciente_id: pacienteSelecionado.id,
+      medico_id: medicoId,
+      consulta_id: consultaSelecionada.id,
+      data_atendimento: consultaSelecionada.data,
+      anamnese: {
+        motivoConsulta: dados.anamnese?.motivoConsulta || '',
+        historiaDoenca: dados.anamnese?.historiaDoenca || '',
+        sintomas: dados.anamnese?.sintomas || [],
+        medicamentosAtuais: dados.anamnese?.medicamentosAtuais || [],
+        alergias: dados.anamnese?.alergias || [],
+        antecedentesFamiliares: dados.anamnese?.antecedentesFamiliares || '',
+        habitos: {
+          fuma: dados.anamnese?.habitos?.fuma || false,
+          bebe: dados.anamnese?.habitos?.bebe || false,
+          exercicios: dados.anamnese?.habitos?.exercicios || '',
+          alimentacao: dados.anamnese?.habitos?.alimentacao || ''
+        }
+      },
+      exame_fisico: {
+        pressaoArterial: dados.exame_fisico?.pressaoArterial || '',
+        frequenciaCardiaca: dados.exame_fisico?.frequenciaCardiaca || '',
+        temperatura: dados.exame_fisico?.temperatura || '',
+        peso: dados.exame_fisico?.peso || '',
+        altura: dados.exame_fisico?.altura || '',
+        imc: dados.exame_fisico?.imc || '',
+        observacoes: dados.exame_fisico?.observacoes || ''
+      },
+      diagnostico: {
+        principal: dados.diagnostico?.principal || '',
+        secundarios: dados.diagnostico?.secundarios || [],
+        cid: dados.diagnostico?.cid || ''
+      },
+      prescricao: {
+        medicamentos: dados.prescricao?.medicamentos || [],
+        exames: dados.prescricao?.exames || [],
+        orientacoes: dados.prescricao?.orientacoes || ''
+      },
+      observacoes: dados.observacoes || ''
+    };
+
+    if (prontuarioAtual?.id) {
+      // Atualizar prontuário existente
+      atualizarProntuarioMutation.mutate({
+        id: prontuarioAtual.id,
+        dados: dadosProntuario
+      });
+    } else {
+      // Criar novo prontuário
+      criarProntuarioMutation.mutate(dadosProntuario);
+    }
   };
 
   const abas = [
@@ -269,13 +428,42 @@ const Prontuario: React.FC = () => {
                 {modoTelaCheia ? 'Normal' : 'Tela Cheia'}
               </span>
             </button>
-            <button
-              onClick={handleNovoProntuario}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center space-x-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Novo Prontuário</span>
-            </button>
+            {!modoEdicao ? (
+              <button
+                onClick={handleNovoProntuario}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                disabled={!consultaSelecionada}
+              >
+                <Plus className="w-4 h-4" />
+                <span>{prontuarioAtual ? 'Editar Prontuário' : 'Novo Prontuário'}</span>
+              </button>
+            ) : (
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setModoEdicao(false)}
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSubmitForm(onSubmitProntuario)}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center space-x-2"
+                  disabled={criarProntuarioMutation.isLoading || atualizarProntuarioMutation.isLoading}
+                >
+                  {criarProntuarioMutation.isLoading || atualizarProntuarioMutation.isLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Salvando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-4 h-4" />
+                      <span>Salvar Prontuário</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -469,73 +657,238 @@ const Prontuario: React.FC = () => {
                 </div>
 
                 {/* Conteúdo das Abas */}
-                <div className="space-y-4">
+                <form onSubmit={handleSubmitForm(onSubmitProntuario)} className="space-y-4">
                   {abaAtiva === 'anamnese' && (
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Motivo da Consulta
                         </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.anamnese?.motivoConsulta || 'Não informado'}
-                        </p>
+                        {modoEdicao ? (
+                          <textarea
+                            {...registerForm('anamnese.motivoConsulta')}
+                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            rows={3}
+                            placeholder="Descreva o motivo da consulta..."
+                            defaultValue={prontuarioAtual?.anamnese?.motivoConsulta || ''}
+                          />
+                        ) : (
+                          <p className="text-gray-900 bg-gray-50 p-3 rounded-lg min-h-[3rem]">
+                            {prontuarioAtual?.anamnese?.motivoConsulta || 'Não informado'}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          História da Doença
+                          História da Doença Atual
                         </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.anamnese?.historiaDoenca || 'Não informado'}
-                        </p>
+                        {modoEdicao ? (
+                          <textarea
+                            {...registerForm('anamnese.historiaDoenca')}
+                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            rows={4}
+                            placeholder="Relato do paciente sobre a doença atual..."
+                            defaultValue={prontuarioAtual?.anamnese?.historiaDoenca || ''}
+                          />
+                        ) : (
+                          <p className="text-gray-900 bg-gray-50 p-3 rounded-lg min-h-[4rem]">
+                            {prontuarioAtual?.anamnese?.historiaDoenca || 'Não informado'}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Sintomas
+                          Antecedentes Familiares
                         </label>
-                        <div className="flex flex-wrap gap-2">
-                          {prontuarioAtual?.anamnese?.sintomas?.map((sintoma: any, index: number) => (
-                            <span key={index} className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">
-                              {sintoma}
-                            </span>
-                          )) || <span className="text-gray-500">Nenhum sintoma registrado</span>}
+                        {modoEdicao ? (
+                          <textarea
+                            {...registerForm('anamnese.antecedentesFamiliares')}
+                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            rows={3}
+                            placeholder="Histórico familiar relevante..."
+                            defaultValue={prontuarioAtual?.anamnese?.antecedentesFamiliares || ''}
+                          />
+                        ) : (
+                          <p className="text-gray-900 bg-gray-50 p-3 rounded-lg min-h-[3rem]">
+                            {prontuarioAtual?.anamnese?.antecedentesFamiliares || 'Não informado'}
+                          </p>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Fuma?
+                          </label>
+                          {modoEdicao ? (
+                            <select
+                              {...registerForm('anamnese.habitos.fuma')}
+                              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              defaultValue={prontuarioAtual?.anamnese?.habitos?.fuma ? 'true' : 'false'}
+                            >
+                              <option value="false">Não</option>
+                              <option value="true">Sim</option>
+                            </select>
+                          ) : (
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {prontuarioAtual?.anamnese?.habitos?.fuma ? 'Sim' : 'Não'}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Bebe?
+                          </label>
+                          {modoEdicao ? (
+                            <select
+                              {...registerForm('anamnese.habitos.bebe')}
+                              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              defaultValue={prontuarioAtual?.anamnese?.habitos?.bebe ? 'true' : 'false'}
+                            >
+                              <option value="false">Não</option>
+                              <option value="true">Sim</option>
+                            </select>
+                          ) : (
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {prontuarioAtual?.anamnese?.habitos?.bebe ? 'Sim' : 'Não'}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
                   )}
 
                   {abaAtiva === 'exame' && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Pressão Arterial
-                        </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.exameFisico?.pressaoArterial || 'Não informado'}
-                        </p>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Pressão Arterial (mmHg)
+                          </label>
+                          {modoEdicao ? (
+                            <input
+                              {...registerForm('exame_fisico.pressaoArterial')}
+                              type="text"
+                              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Ex: 120/80"
+                              defaultValue={prontuarioAtual?.exame_fisico?.pressaoArterial || ''}
+                            />
+                          ) : (
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {prontuarioAtual?.exame_fisico?.pressaoArterial || 'Não informado'}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Frequência Cardíaca (bpm)
+                          </label>
+                          {modoEdicao ? (
+                            <input
+                              {...registerForm('exame_fisico.frequenciaCardiaca')}
+                              type="number"
+                              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Ex: 72"
+                              defaultValue={prontuarioAtual?.exame_fisico?.frequenciaCardiaca || ''}
+                            />
+                          ) : (
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {prontuarioAtual?.exame_fisico?.frequenciaCardiaca || 'Não informado'}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Temperatura (°C)
+                          </label>
+                          {modoEdicao ? (
+                            <input
+                              {...registerForm('exame_fisico.temperatura')}
+                              type="number"
+                              step="0.1"
+                              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Ex: 36.5"
+                              defaultValue={prontuarioAtual?.exame_fisico?.temperatura || ''}
+                            />
+                          ) : (
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {prontuarioAtual?.exame_fisico?.temperatura || 'Não informado'}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            IMC
+                          </label>
+                          {modoEdicao ? (
+                            <input
+                              {...registerForm('exame_fisico.imc')}
+                              type="number"
+                              step="0.1"
+                              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Ex: 22.5"
+                              defaultValue={prontuarioAtual?.exame_fisico?.imc || ''}
+                            />
+                          ) : (
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {prontuarioAtual?.exame_fisico?.imc || 'Não informado'}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Peso (kg)
+                          </label>
+                          {modoEdicao ? (
+                            <input
+                              {...registerForm('exame_fisico.peso')}
+                              type="number"
+                              step="0.1"
+                              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Ex: 70.5"
+                              defaultValue={prontuarioAtual?.exame_fisico?.peso || ''}
+                            />
+                          ) : (
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {prontuarioAtual?.exame_fisico?.peso ? `${prontuarioAtual.exame_fisico.peso} kg` : 'Não informado'}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Altura (cm)
+                          </label>
+                          {modoEdicao ? (
+                            <input
+                              {...registerForm('exame_fisico.altura')}
+                              type="number"
+                              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Ex: 170"
+                              defaultValue={prontuarioAtual?.exame_fisico?.altura || ''}
+                            />
+                          ) : (
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                              {prontuarioAtual?.exame_fisico?.altura ? `${prontuarioAtual.exame_fisico.altura} cm` : 'Não informado'}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Frequência Cardíaca
+                          Observações do Exame Físico
                         </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.exameFisico?.frequenciaCardiaca || 'Não informado'}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Temperatura
-                        </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.exameFisico?.temperatura || 'Não informado'}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          IMC
-                        </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.exameFisico?.imc || 'Não informado'}
-                        </p>
+                        {modoEdicao ? (
+                          <textarea
+                            {...registerForm('exame_fisico.observacoes')}
+                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            rows={4}
+                            placeholder="Observações adicionais do exame físico..."
+                            defaultValue={prontuarioAtual?.exame_fisico?.observacoes || ''}
+                          />
+                        ) : (
+                          <p className="text-gray-900 bg-gray-50 p-3 rounded-lg min-h-[4rem]">
+                            {prontuarioAtual?.exame_fisico?.observacoes || 'Não informado'}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -546,17 +899,37 @@ const Prontuario: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Diagnóstico Principal
                         </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.diagnostico?.principal || 'Não informado'}
-                        </p>
+                        {modoEdicao ? (
+                          <textarea
+                            {...registerForm('diagnostico.principal')}
+                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            rows={4}
+                            placeholder="Descrição do diagnóstico principal..."
+                            defaultValue={prontuarioAtual?.diagnostico?.principal || ''}
+                          />
+                        ) : (
+                          <p className="text-gray-900 bg-gray-50 p-3 rounded-lg min-h-[4rem]">
+                            {prontuarioAtual?.diagnostico?.principal || 'Não informado'}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           CID-10
                         </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.diagnostico?.cid || 'Não informado'}
-                        </p>
+                        {modoEdicao ? (
+                          <input
+                            {...registerForm('diagnostico.cid')}
+                            type="text"
+                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Ex: I10 (Hipertensão essencial)"
+                            defaultValue={prontuarioAtual?.diagnostico?.cid || ''}
+                          />
+                        ) : (
+                          <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                            {prontuarioAtual?.diagnostico?.cid || 'Não informado'}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -565,35 +938,53 @@ const Prontuario: React.FC = () => {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Medicamentos
+                          Orientações e Prescrições
                         </label>
-                        <div className="space-y-2">
-                          {prontuarioAtual?.prescricao?.medicamentos?.map((med: any, index: number) => (
-                            <div key={index} className="bg-gray-50 p-3 rounded-lg">
-                              <p className="font-medium text-gray-900">{med.nome}</p>
-                              <p className="text-sm text-gray-600">
-                                {med.dosagem} - {med.frequencia} - {med.duracao}
-                              </p>
-                              <p className="text-xs text-gray-500">{med.observacoes}</p>
-                            </div>
-                          )) || <p className="text-gray-500">Nenhum medicamento prescrito</p>}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Exames Solicitados
-                        </label>
-                        <div className="space-y-2">
-                          {prontuarioAtual?.prescricao?.exames?.map((exame: any, index: number) => (
-                            <div key={index} className="bg-gray-50 p-3 rounded-lg">
-                              <p className="font-medium text-gray-900">{exame.tipo}</p>
-                              <p className="text-sm text-gray-600">{exame.descricao}</p>
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                {exame.urgencia}
-                              </span>
-                            </div>
-                          )) || <p className="text-gray-500">Nenhum exame solicitado</p>}
-                        </div>
+                        {modoEdicao ? (
+                          <textarea
+                            {...registerForm('prescricao.orientacoes')}
+                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            rows={10}
+                            placeholder="Orientações, prescrições médicas, solicitação de exames, etc..."
+                            defaultValue={prontuarioAtual?.prescricao?.orientacoes || ''}
+                          />
+                        ) : (
+                          <div className="space-y-4">
+                            {prontuarioAtual?.prescricao?.medicamentos?.length > 0 && (
+                              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <h4 className="font-semibold text-gray-900 mb-3">Medicamentos Prescritos:</h4>
+                                {prontuarioAtual.prescricao.medicamentos.map((med: any, index: number) => (
+                                  <div key={index} className="mb-3 pb-3 border-b border-gray-200 last:border-0">
+                                    <p className="font-medium text-gray-900">{med.nome}</p>
+                                    <p className="text-sm text-gray-600">
+                                      {med.dosagem} - {med.frequencia} - {med.duracao}
+                                    </p>
+                                    {med.observacoes && (
+                                      <p className="text-xs text-gray-500 mt-1">{med.observacoes}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {prontuarioAtual?.prescricao?.exames?.length > 0 && (
+                              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <h4 className="font-semibold text-gray-900 mb-3">Exames Solicitados:</h4>
+                                {prontuarioAtual.prescricao.exames.map((exame: any, index: number) => (
+                                  <div key={index} className="mb-3 pb-3 border-b border-gray-200 last:border-0">
+                                    <p className="font-medium text-gray-900">{exame.tipo}</p>
+                                    <p className="text-sm text-gray-600">{exame.descricao}</p>
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mt-1">
+                                      {exame.urgencia}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <p className={`text-gray-900 bg-gray-50 p-3 rounded-lg ${!prontuarioAtual?.prescricao?.orientacoes ? 'min-h-[10rem]' : ''} whitespace-pre-wrap`}>
+                              {prontuarioAtual?.prescricao?.orientacoes || 'Não informado'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -602,38 +993,39 @@ const Prontuario: React.FC = () => {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Evolução
+                          Observações Gerais / Evolução
                         </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.evolucao || 'Não informado'}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Próxima Consulta
-                        </label>
-                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                          {prontuarioAtual?.proximaConsulta ? 
-                            new Date(prontuarioAtual.proximaConsulta).toLocaleDateString('pt-BR') : 
-                            'Não agendada'
-                          }
-                        </p>
+                        {modoEdicao ? (
+                          <textarea
+                            {...registerForm('observacoes')}
+                            className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            rows={10}
+                            placeholder="Observações adicionais, evolução do paciente, etc..."
+                            defaultValue={prontuarioAtual?.observacoes || ''}
+                          />
+                        ) : (
+                          <>
+                            <p className="text-gray-900 bg-gray-50 p-3 rounded-lg min-h-[10rem] whitespace-pre-wrap">
+                              {prontuarioAtual?.observacoes || 'Não informado'}
+                            </p>
+                            {prontuarioAtual && (
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                                <p className="text-sm text-blue-800">
+                                  <strong>Data de criação:</strong> {new Date(prontuarioAtual.created_at).toLocaleString('pt-BR')}
+                                </p>
+                                {prontuarioAtual.updated_at !== prontuarioAtual.created_at && (
+                                  <p className="text-sm text-blue-800 mt-1">
+                                    <strong>Última atualização:</strong> {new Date(prontuarioAtual.updated_at).toLocaleString('pt-BR')}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
-                </div>
-
-                {/* Botões de Ação */}
-                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                  <button className="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Download className="w-4 h-4 mr-2 inline" />
-                    Exportar PDF
-                  </button>
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                    <Edit className="w-4 h-4 mr-2 inline" />
-                    Editar
-                  </button>
-                </div>
+                </form>
               </div>
             ) : (
               <div className="text-center py-8">

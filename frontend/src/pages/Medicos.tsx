@@ -40,6 +40,7 @@ interface MedicoForm {
   crm: string;
   telefone: string;
   email: string;
+  senha: string;
   ativo: boolean;
 }
 
@@ -205,6 +206,7 @@ const Medicos: React.FC = () => {
     setValue('telefone', medico.telefone);
     setValue('email', medico.email);
     setValue('ativo', medico.ativo);
+    // Não preencher senha na edição (por segurança)
   };
 
   const handleDeletar = (id: number) => {
@@ -677,7 +679,7 @@ const Medicos: React.FC = () => {
                   </div>
 
                   {/* Email */}
-                  <div className="md:col-span-2">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Email *
                     </label>
@@ -700,6 +702,42 @@ const Medicos: React.FC = () => {
                       </p>
                     )}
                   </div>
+
+                  {/* Senha */}
+                  {!modoEdicao && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Senha
+                        <span className="text-gray-500 font-normal text-xs ml-2">(opcional)</span>
+                      </label>
+                      <input
+                        type="password"
+                        {...register('senha', { 
+                          minLength: {
+                            value: 6,
+                            message: 'Senha deve ter no mínimo 6 caracteres'
+                          },
+                          validate: (value) => {
+                            if (value && value.trim().length > 0 && value.length < 6) {
+                              return 'Senha deve ter no mínimo 6 caracteres';
+                            }
+                            return true;
+                          }
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-azure-vivido focus:border-transparent"
+                        placeholder="Digite a senha (mín. 6 caracteres) ou deixe em branco"
+                      />
+                      {errors.senha && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                          <AlertCircle className="w-4 h-4 mr-1" />
+                          {errors.senha.message}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-gray-500">
+                        Se não informar, será usada a senha padrão: <strong>123456</strong>
+                      </p>
+                    </div>
+                  )}
 
                   {/* Status */}
                   <div className="md:col-span-2">

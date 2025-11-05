@@ -51,12 +51,12 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
   const notificacoesNaoLidas = notificacoesData?.data?.count || 0;
 
   return (
-    <header className="h-16 bg-white shadow-sm border-b border-gray-200">
+    <header className="h-16 bg-white/10 backdrop-blur-xl border-b border-white/20 shadow-lg sticky top-0 z-10">
       <div className="px-6 h-full flex items-center justify-between">
         {/* Botão de toggle do sidebar */}
         <button
           onClick={onToggleSidebar}
-          className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors lg:hidden"
+          className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm lg:hidden"
         >
           {sidebarOpen ? (
             <X className="w-5 h-5" />
@@ -67,7 +67,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
 
         {/* Título */}
         <div className="flex items-center space-x-4">
-          <h1 className="text-xl font-semibold text-gray-900">
+          <h1 className="text-xl font-semibold text-white">
             {usuario?.tipo === 'admin' && '👨‍💼 Painel Administrativo'}
             {usuario?.tipo === 'medico' && '👨‍⚕️ Painel do Médico'}
             {usuario?.tipo === 'paciente' && '👤 Meu Painel'}
@@ -79,10 +79,10 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
         <div className="flex items-center space-x-4">
           {/* Notificações */}
           <div className="relative">
-            <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+            <button className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm">
               <Bell className="w-5 h-5" />
               {notificacoesNaoLidas > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center shadow-lg border-2 border-white">
                   {notificacoesNaoLidas > 9 ? '9+' : notificacoesNaoLidas}
                 </span>
               )}
@@ -93,28 +93,28 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center space-x-3 p-2 hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm"
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+              <div className="w-10 h-10 bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg border border-white/30">
                 <User className="w-5 h-5 text-white" />
               </div>
               <div className="flex flex-col text-left">
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-white">
                   {usuario?.nome}
                 </span>
-                <span className="text-xs text-gray-500 capitalize">
+                <span className="text-xs text-white/80 capitalize">
                   {usuario?.tipo === 'admin' && 'Administrador'}
                   {usuario?.tipo === 'medico' && 'Médico'}
                   {usuario?.tipo === 'paciente' && 'Paciente'}
                 </span>
               </div>
-              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-white/80 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Dropdown Menu */}
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
-                <div className="px-4 py-3 border-b border-gray-100">
+              <div className="absolute right-0 mt-2 w-56 bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-white/30 py-2 z-50">
+                <div className="px-4 py-3 border-b border-gray-200/50">
                   <p className="text-sm font-medium text-gray-900">{usuario?.nome}</p>
                   <p className="text-xs text-gray-500">{usuario?.email}</p>
                 </div>
@@ -129,7 +129,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
                   </button>
                 </div>
                 
-                <div className="px-4 py-2 bg-gray-50 rounded-b-xl">
+                <div className="px-4 py-2 bg-gray-50/50 rounded-b-xl">
                   <p className="text-xs text-gray-500 text-center">
                     Trocar de usuário para testar diferentes perfis
                   </p>

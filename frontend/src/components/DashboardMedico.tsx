@@ -12,19 +12,30 @@ import {
   AlertCircle,
   Users
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const DashboardMedico: React.FC = () => {
   const { usuario, medico } = useAuth();
 
   // Buscar consultas do médico
+  // O backend filtra automaticamente por medico_id baseado no token
+  // Não precisa passar medico_id, o backend já filtra pelo usuário logado
   const { data: consultasData } = useQuery(
     'medico-dashboard-consultas',
     () => consultaService.listar({ 
       page: 1, 
-      limit: 10,
-      medico_id: medico?.id || usuario?.id
+      limit: 10
+      // Não passar medico_id - o backend filtra automaticamente pelo token
     }),
-    { enabled: !!(medico?.id || usuario?.id) }
+    { 
+      enabled: !!usuario,
+      onSuccess: (data) => {
+        console.log('✅ Dashboard Médico - Consultas carregadas:', data?.data?.consultas?.length || 0, 'consultas');
+      },
+      onError: (error) => {
+        console.error('❌ Dashboard Médico - Erro ao carregar consultas:', error);
+      }
+    }
   );
 
   const { data: notificacoesData } = useQuery(
@@ -33,8 +44,16 @@ const DashboardMedico: React.FC = () => {
     { enabled: !!usuario }
   );
 
-  const consultas = Array.isArray(consultasData?.data?.consultas) ? consultasData.data.consultas : 
-                   Array.isArray(consultasData?.data) ? consultasData.data : [];
+  // Tratar resposta da API - pode vir em diferentes formatos
+  let consultas: any[] = [];
+  if (consultasData?.success && consultasData?.data) {
+    if (Array.isArray(consultasData.data)) {
+      consultas = consultasData.data;
+    } else if (consultasData.data.consultas && Array.isArray(consultasData.data.consultas)) {
+      consultas = consultasData.data.consultas;
+    }
+  }
+  
   const notificacoes = Array.isArray(notificacoesData?.data) ? notificacoesData.data : [];
 
   // Calcular estatísticas
@@ -181,10 +200,51 @@ const DashboardMedico: React.FC = () => {
         </div>
       </div>
 
+      {/* Ações Rápidas */}
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+          <span className="text-2xl mr-2">⚡</span>
+          Ações Rápidas
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Link
+            to="/agenda-medica"
+            className="group bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-xl p-6 hover:from-green-600 hover:to-emerald-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-lg">Agenda Médica</p>
+                <p className="text-green-100 text-sm mt-1">Visualize sua agenda diária detalhada</p>
+              </div>
+              <Calendar className="h-8 w-8 group-hover:scale-110 transition-transform" />
+            </div>
+          </Link>
+          
+          <Link
+            to="/consultas"
+            className="group bg-gradient-to-br from-blue-500 to-cyan-600 text-white rounded-xl p-6 hover:from-blue-600 hover:to-cyan-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-lg">Minhas Consultas</p>
+                <p className="text-blue-100 text-sm mt-1">Gerencie todas as consultas</p>
+              </div>
+              <Clock className="h-8 w-8 group-hover:scale-110 transition-transform" />
+            </div>
+          </Link>
+        </div>
+      </div>
+
       {/* Próximas Consultas */}
       <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-lg font-medium text-gray-900">Próximas Consultas</h3>
+          <Link
+            to="/agenda-medica"
+            className="text-sm text-green-600 hover:text-green-700 font-medium"
+          >
+            Ver agenda completa →
+          </Link>
         </div>
         <div className="p-6">
           {proximasConsultas.length > 0 ? (
@@ -194,8 +254,10 @@ const DashboardMedico: React.FC = () => {
                   <div className="flex items-center">
                     <User className="h-5 w-5 text-gray-400 mr-3" />
                     <div>
-                      <p className="font-medium text-gray-900">{consulta.paciente?.nome}</p>
-                      <p className="text-sm text-gray-600">{consulta.tipo_consulta}</p>
+                      <p className="font-medium text-gray-900">
+                        {consulta.paciente?.usuario?.nome || consulta.paciente?.nome || 'Nome não disponível'}
+                      </p>
+                      <p className="text-sm text-gray-600">{consulta.tipo_consulta || consulta.tipo || 'Consulta'}</p>
                     </div>
                   </div>
                   <div className="text-right">

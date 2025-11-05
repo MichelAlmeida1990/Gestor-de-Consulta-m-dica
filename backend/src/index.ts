@@ -341,7 +341,7 @@ app.post('/api/medicos', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { nome, email, telefone, crm, especialidade, ativo } = req.body;
+    const { nome, email, telefone, crm, especialidade, ativo, senha } = req.body;
     
     if (!nome || !email || !crm || !especialidade) {
       res.status(400).json({
@@ -389,64 +389,174 @@ app.post('/api/medicos', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Criar usuário primeiro
-    const senhaPadrao = '123456'; // Senha padrão para médicos
-    const senhaHash = await AuthService.hashPassword(senhaPadrao);
+    // Se senha não fornecida, usar senha padrão, senão usar a senha fornecida
+    let senhaFinal = '123456'; // Senha padrão
     
-    const usuarioResult = await database.run(`
-      INSERT INTO usuarios (nome, email, senha, tipo, telefone, ativo)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [nome, email, senhaHash, 'medico', telefone, ativo !== false]);
+    if (senha && typeof senha === 'string' && senha.trim().length > 0) {
+      senhaFinal = senha.trim();
+      console.log('🔐 Senha fornecida pelo admin');
+    } else {
+      console.log('🔐 Usando senha padrão (123456)');
+    }
+    
+    // Validar senha (mínimo 6 caracteres)
+    if (senhaFinal.length < 6) {
+      console.log('❌ Senha inválida:', senhaFinal.length, 'caracteres');
+      res.status(400).json({
+        success: false,
+        error: {
+          message: 'Senha deve ter no mínimo 6 caracteres',
+          statusCode: 400
+        }
+      });
+      return;
+    }
+    
+    console.log('🔐 Criando médico com senha:', senha ? 'Senha fornecida' : 'Senha padrão (123456)');
+    
+    let senhaHash;
+    try {
+      senhaHash = await AuthService.hashPassword(senhaFinal);
+      console.log('✅ Senha hash gerada com sucesso');
+    } catch (hashError) {
+      console.error('❌ Erro ao gerar hash da senha:', hashError);
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Erro ao processar senha',
+          statusCode: 500
+        }
+      });
+      return;
+    }
+    
+    let usuarioResult;
+    try {
+      console.log('📝 Criando usuário para o médico...');
+      usuarioResult = await database.run(`
+        INSERT INTO usuarios (nome, email, senha, tipo, telefone, ativo)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [nome, email, senhaHash, 'medico', telefone || null, ativo !== false]);
+      console.log('✅ Usuário criado com ID:', usuarioResult.lastID);
+    } catch (dbError) {
+      console.error('❌ Erro ao criar usuário:', dbError);
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Erro ao criar usuário do médico',
+          statusCode: 500
+        }
+      });
+      return;
+    }
 
     const usuarioId = usuarioResult.lastID;
 
     // Criar médico
-    const medicoResult = await database.run(`
-      INSERT INTO medicos (usuario_id, crm, especialidade)
-      VALUES (?, ?, ?)
-    `, [usuarioId, crm, especialidade]);
+    let medicoResult;
+    try {
+      console.log('📝 Criando registro de médico...');
+      medicoResult = await database.run(`
+        INSERT INTO medicos (usuario_id, crm, especialidade)
+        VALUES (?, ?, ?)
+      `, [usuarioId, crm, especialidade]);
+      console.log('✅ Médico criado com ID:', medicoResult.lastID);
+    } catch (dbError) {
+      console.error('❌ Erro ao criar médico:', dbError);
+      // Se falhar ao criar médico, tentar remover o usuário criado
+      try {
+        await database.run('DELETE FROM usuarios WHERE id = ?', [usuarioId]);
+        console.log('✅ Usuário removido após erro na criação do médico');
+      } catch (cleanupError) {
+        console.error('❌ Erro ao remover usuário após falha:', cleanupError);
+      }
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Erro ao criar registro de médico',
+          statusCode: 500
+        }
+      });
+      return;
+    }
 
     // Buscar médico criado com dados do usuário
-    const medicoRaw = await database.get(`
-      SELECT 
-        m.id,
-        m.usuario_id,
-        m.crm,
-        m.especialidade,
-        u.nome,
-        u.email,
-        u.telefone,
-        u.ativo,
-        u.created_at
-      FROM medicos m 
-      JOIN usuarios u ON m.usuario_id = u.id 
-      WHERE m.id = ?
-    `, [medicoResult.lastID]);
+    let medicoRaw;
+    try {
+      medicoRaw = await database.get(`
+        SELECT 
+          m.id,
+          m.usuario_id,
+          m.crm,
+          m.especialidade,
+          u.nome,
+          u.email,
+          u.telefone,
+          u.ativo,
+          u.created_at
+        FROM medicos m 
+        JOIN usuarios u ON m.usuario_id = u.id 
+        WHERE m.id = ?
+      `, [medicoResult.lastID]);
+      
+      if (!medicoRaw) {
+        console.log('⚠️ Médico criado mas não encontrado na busca');
+      } else {
+        console.log('✅ Médico encontrado:', medicoRaw.id);
+      }
+    } catch (dbError) {
+      console.error('❌ Erro ao buscar médico criado:', dbError);
+      // Mesmo assim retornar sucesso, pois o médico foi criado
+      medicoRaw = null;
+    }
 
     // Formatar dados para o frontend
-    const medico = {
-      id: medicoRaw.id,
-      nome: medicoRaw.nome,
-      email: medicoRaw.email,
-      telefone: medicoRaw.telefone,
-      crm: medicoRaw.crm,
-      especialidade: medicoRaw.especialidade,
-      ativo: medicoRaw.ativo === 1 || medicoRaw.ativo === true,
-      created_at: medicoRaw.created_at
-    };
-
-    console.log('✅ Médico criado com sucesso:', medico);
+    let medico;
+    
+    if (medicoRaw) {
+      // Formatar dados do médico encontrado
+      medico = {
+        id: medicoRaw.id,
+        nome: medicoRaw.nome,
+        email: medicoRaw.email,
+        telefone: medicoRaw.telefone,
+        crm: medicoRaw.crm,
+        especialidade: medicoRaw.especialidade,
+        ativo: medicoRaw.ativo === 1 || medicoRaw.ativo === true,
+        created_at: medicoRaw.created_at
+      };
+      console.log('✅ Médico criado com sucesso:', medico.id);
+    } else {
+      // Médico foi criado mas não foi encontrado na busca - retornar dados básicos
+      console.log('⚠️ Retornando dados básicos do médico criado');
+      medico = {
+        id: medicoResult.lastID,
+        nome: nome,
+        email: email,
+        telefone: telefone || null,
+        crm: crm,
+        especialidade: especialidade,
+        ativo: ativo !== false,
+        created_at: new Date().toISOString()
+      };
+      console.log('✅ Médico criado (dados básicos):', medico.id);
+    }
 
     res.status(201).json({
       success: true,
       data: medico,
-      message: 'Médico criado com sucesso'
+      message: 'Médico cadastrado com sucesso'
     });
   } catch (error) {
-    console.error('Erro ao criar médico:', error);
+    console.error('❌ Erro ao criar médico:', error);
+    if (error instanceof Error) {
+      console.error('❌ Mensagem de erro:', error.message);
+      console.error('❌ Stack trace:', error.stack);
+    }
     res.status(500).json({
       success: false,
       error: {
-        message: 'Erro interno do servidor',
+        message: error instanceof Error ? error.message : 'Erro interno do servidor',
         statusCode: 500
       }
     });

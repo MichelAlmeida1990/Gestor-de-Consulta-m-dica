@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Agendamento from './pages/Agendamento';
 import Consultas from './pages/Consultas';
+import AgendaMedica from './pages/AgendaMedica';
 import Medicos from './pages/Medicos';
 import Perfil from './pages/Perfil';
 import Notificacoes from './pages/Notificacoes';
@@ -101,6 +102,16 @@ const AppContent: React.FC = () => {
           <ProtectedRoute>
             <Layout>
               <Consultas />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agenda-medica"
+        element={
+          <ProtectedRoute requiredRole="medico">
+            <Layout>
+              <AgendaMedica />
             </Layout>
           </ProtectedRoute>
         }

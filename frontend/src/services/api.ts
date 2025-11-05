@@ -21,23 +21,38 @@ api.interceptors.request.use(
   (config) => {
     const tokenData = localStorage.getItem('token');
     
+    console.log('🔍 Request interceptor - URL:', config.url);
+    console.log('🔍 Request interceptor - Token no localStorage:', tokenData ? 'Sim' : 'Não');
+    
     if (tokenData) {
+      let token = tokenData;
+      
       try {
         // Tentar parsear como objeto com timestamp
         const parsed = JSON.parse(tokenData);
         if (parsed.token) {
-          config.headers.Authorization = `Bearer ${parsed.token}`;
+          token = parsed.token;
+          console.log('🔍 Token parseado como JSON');
         }
       } catch {
         // Token é string simples - usar direto
-        config.headers.Authorization = `Bearer ${tokenData}`;
+        console.log('🔍 Token é string simples');
+        token = tokenData;
       }
       
-      // Log para debug
-      console.log('🔑 Token enviado na requisição:', config.headers.Authorization?.substring(0, 30) + '...');
+      // Garantir que o token não está vazio
+      if (token && token.trim().length > 0) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('✅ Token adicionado ao header:', config.headers.Authorization?.substring(0, 30) + '...');
+      } else {
+        console.log('⚠️ Token vazio ou inválido');
+      }
     } else {
       console.log('⚠️ Nenhum token encontrado no localStorage');
+      console.log('⚠️ Requisição será feita sem token - pode resultar em 401');
     }
+    
+    console.log('🔍 Request interceptor - Header Authorization:', config.headers.Authorization ? 'Presente' : 'Ausente');
     
     return config;
   },
@@ -285,6 +300,7 @@ export const medicoService = {
 export const consultaService = {
   async listar(params?: any) {
     const response = await api.get('/consultas', { params });
+    console.log('📋 Resposta da API de consultas:', response.data);
     return response.data;
   },
 

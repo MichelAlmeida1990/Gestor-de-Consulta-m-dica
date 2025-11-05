@@ -86,17 +86,34 @@ export class AuthService {
     try {
       console.log('🔐 AuthService.login chamado com:', { email, senha: '***' });
       
-      // Buscar usuário por email
-      const usuario = await database.get(
-        'SELECT * FROM usuarios WHERE email = ? AND ativo = 1',
+      // Buscar usuário por email (sem verificar ativo primeiro para debug)
+      let usuario = await database.get(
+        'SELECT * FROM usuarios WHERE email = ?',
         [email]
       );
 
+      console.log('🔍 Usuário encontrado:', usuario ? 'Sim' : 'Não');
+      
       if (!usuario) {
+        console.log('❌ Usuário não encontrado para email:', email);
         return {
           success: false,
           error: {
             message: 'Email ou senha incorretos',
+            statusCode: 401
+          }
+        };
+      }
+
+      // Verificar se está ativo (SQLite pode usar 0/1, true/false, ou '1'/'0')
+      const isAtivo = usuario.ativo === 1 || usuario.ativo === true || usuario.ativo === '1' || usuario.ativo === 1;
+      
+      if (!isAtivo) {
+        console.log('⚠️ Usuário encontrado mas está inativo:', { email, ativo: usuario.ativo });
+        return {
+          success: false,
+          error: {
+            message: 'Usuário inativo. Entre em contato com o administrador.',
             statusCode: 401
           }
         };
@@ -302,13 +319,26 @@ export class AuthService {
   // Middleware de autenticação
   static async authenticateToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      console.log('🔐 ========== AUTHENTICATE TOKEN MIDDLEWARE ==========');
+      console.log('🔐 URL:', req.url);
+      console.log('🔐 Method:', req.method);
+      
       const authHeader = req.headers['authorization'];
-      console.log('🔐 Auth Header recebido:', authHeader ? 'Bearer ***' : 'Nenhum header');
+      console.log('🔐 Auth Header recebido:', authHeader ? `Bearer ${authHeader.substring(7, 37)}...` : 'Nenhum header');
+      
+      // Verificar também em outros lugares
+      const authHeaderAlt = req.headers['Authorization'] || req.headers['AUTHORIZATION'];
+      if (authHeaderAlt && !authHeader) {
+        console.log('🔐 Auth Header encontrado em variação (Authorization):', authHeaderAlt ? 'Sim' : 'Não');
+      }
       
       const token = authHeader && authHeader.split(' ')[1];
 
       if (!token) {
         console.log('❌ Token não encontrado no header');
+        console.log('❌ Headers recebidos:', Object.keys(req.headers));
+        console.log('❌ Authorization header:', req.headers['authorization']);
+        console.log('❌ Authorization header (alt):', req.headers['Authorization']);
         res.status(401).json({
           success: false,
           error: {
@@ -324,7 +354,7 @@ export class AuthService {
       
       let decoded;
       try {
-        decoded = this.verifyToken(token);
+        decoded = AuthService.verifyToken(token);
         console.log('✅ Token válido, decodificado:', { 
           id: decoded.id, 
           email: decoded.email,
@@ -370,7 +400,7 @@ export class AuthService {
         } else {
           // Se não encontrou, tentar getUserById também
           console.log('⚠️ Não encontrado diretamente, tentando getUserById...');
-          usuario = await this.getUserById(decoded.id);
+          usuario = await AuthService.getUserById(decoded.id);
         }
       } catch (dbError) {
         console.error('❌ Erro ao buscar usuário no database:', dbError);
@@ -406,6 +436,7 @@ export class AuthService {
 
       console.log('✅ Usuário autenticado:', { id: usuario.id, email: usuario.email, tipo: usuario.tipo });
       req.usuario = usuario;
+      console.log('🔐 ========== AUTHENTICATION SUCCESS ==========');
       next();
     } catch (error) {
       console.error('❌ Erro na autenticação:', error);

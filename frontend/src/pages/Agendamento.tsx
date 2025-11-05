@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, Stethoscope, MapPin, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { consultaService, medicoService, salaService } from '../services/api';
@@ -18,6 +19,7 @@ interface AgendamentoForm {
 
 const Agendamento: React.FC = () => {
   const { usuario } = useAuth();
+  const navigate = useNavigate();
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
@@ -33,8 +35,21 @@ const Agendamento: React.FC = () => {
     : todosMedicos;
 
   // Buscar salas disponíveis
-  const { data: salasData } = useQuery('salas', () => salaService.listar());
+  const { data: salasData, isLoading: isLoadingSalas, error: errorSalas } = useQuery('salas', () => salaService.listar(), {
+    onSuccess: (data) => {
+      console.log('✅ Salas carregadas:', data);
+    },
+    onError: (error) => {
+      console.error('❌ Erro ao carregar salas:', error);
+    }
+  });
   const salas = salasData?.data || [];
+  
+  // Log para debug
+  useEffect(() => {
+    console.log('📋 Salas disponíveis:', salas);
+    console.log('📋 Salas data:', salasData);
+  }, [salas, salasData]);
 
   // Buscar consultas existentes para verificar conflitos
   const { data: consultasData } = useQuery(
@@ -84,6 +99,11 @@ const Agendamento: React.FC = () => {
         queryClient.invalidateQueries('dashboard-consultas');
         queryClient.invalidateQueries('dashboard');
         
+        // Forçar refetch das consultas
+        queryClient.refetchQueries('consultas').then(() => {
+          console.log('✅ Queries invalidadas e refetchadas - lista deve atualizar automaticamente');
+        });
+        
         // Reset form
         setValue('medico_id', 0);
         setValue('sala_id', 0);
@@ -94,7 +114,10 @@ const Agendamento: React.FC = () => {
         setValue('urgencia', 'normal');
         setAvailableTimes([]);
         
-        console.log('✅ Queries invalidadas - lista deve atualizar automaticamente');
+        // Redirecionar para a página de consultas após 1 segundo
+        setTimeout(() => {
+          navigate('/consultas');
+        }, 1000);
       },
       onError: (error: any) => {
         console.error('❌ Erro ao criar consulta:', error);
@@ -230,11 +253,15 @@ const Agendamento: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-azure-vivido focus:border-transparent"
               >
                 <option value={0}>Selecione uma sala</option>
-                {salas.map((sala: any) => (
-                  <option key={sala.id} value={sala.id}>
-                    {sala.nome} - {sala.tipo}
-                  </option>
-                ))}
+                {salas && salas.length > 0 ? (
+                  salas.map((sala: any) => (
+                    <option key={sala.id} value={sala.id}>
+                      {sala.nome} {sala.numero ? `- Sala ${sala.numero}` : ''} {sala.andar ? `(${sala.andar}º andar)` : ''}
+                    </option>
+                  ))
+                ) : (
+                  <option disabled>Nenhuma sala disponível</option>
+                )}
               </select>
               {errors.sala_id && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">

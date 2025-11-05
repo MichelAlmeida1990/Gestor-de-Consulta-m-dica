@@ -257,6 +257,11 @@ export class ConsultaService {
       const params: any[] = [];
 
       // Aplicar filtros
+      if (filtros.id) {
+        sql += ' AND c.id = ?';
+        params.push(filtros.id);
+      }
+
       if (filtros.paciente_id) {
         sql += ' AND c.paciente_id = ?';
         params.push(filtros.paciente_id);

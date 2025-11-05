@@ -83,15 +83,46 @@ const Consultas: React.FC = () => {
     }
   );
 
-  const consultas = consultasData?.data?.consultas || [];
+  // A API retorna { success: true, data: { consultas: [...], pagination: {...} } }
+  // Mas também pode retornar consultas diretamente em data
+  let consultas: Consulta[] = [];
   
-  // Debug
+  if (consultasData?.success && consultasData?.data) {
+    if (Array.isArray(consultasData.data)) {
+      // Se data é um array direto
+      consultas = consultasData.data;
+    } else if (consultasData.data.consultas && Array.isArray(consultasData.data.consultas)) {
+      // Se data.consultas é um array
+      consultas = consultasData.data.consultas;
+    } else if (Array.isArray(consultasData.data)) {
+      // Fallback: se data é array
+      consultas = consultasData.data;
+    }
+  }
+  
+  // Debug detalhado
   useEffect(() => {
-    console.log('🔍 Consultas Data:', consultasData);
-    console.log('🔍 Consultas Array:', consultas);
+    console.log('🔍 ========== DEBUG CONSULTAS ==========');
+    console.log('🔍 Consultas Data completa:', consultasData);
+    console.log('🔍 Consultas Data.success:', consultasData?.success);
+    console.log('🔍 Consultas Data.data:', consultasData?.data);
+    console.log('🔍 Consultas Data.data.consultas:', consultasData?.data?.consultas);
+    console.log('🔍 Consultas Data.data é array?', Array.isArray(consultasData?.data));
+    console.log('🔍 Consultas Array final:', consultas);
+    console.log('🔍 Quantidade de consultas:', consultas.length);
     console.log('🔍 Loading:', isLoading);
     console.log('🔍 Error:', error);
     console.log('🔍 Usuario:', usuario);
+    if (consultas.length > 0) {
+      console.log('🔍 Primeira consulta:', consultas[0]);
+      console.log('🔍 Primeira consulta ID:', consultas[0].id);
+      console.log('🔍 Primeira consulta paciente_id:', consultas[0].paciente?.id);
+      console.log('🔍 Primeira consulta paciente_usuario_id:', consultas[0].paciente?.usuario_id);
+    } else {
+      console.log('⚠️ NENHUMA CONSULTA ENCONTRADA!');
+      console.log('⚠️ Verifique se há consultas no banco para este usuário');
+    }
+    console.log('🔍 ====================================');
   }, [consultasData, consultas, isLoading, error, usuario]);
 
   // Mutação para cancelar consulta
@@ -322,7 +353,21 @@ const Consultas: React.FC = () => {
             <div className="w-8 h-8 border-4 border-azure-vivido border-t-transparent rounded-full animate-spin mx-auto mb-4" />
             <p className="text-gray-600">Carregando consultas...</p>
           </div>
-        ) : consultas.length === 0 ? (
+        ) : error ? (
+          <div className="p-4 text-center">
+            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Erro ao carregar consultas</h3>
+            <p className="text-gray-600">
+              {error instanceof Error ? error.message : 'Ocorreu um erro ao buscar suas consultas.'}
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="mt-4 px-4 py-2 bg-azure-vivido text-white rounded-lg hover:bg-azul-principal transition-colors"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : !consultas || consultas.length === 0 ? (
           <div className="p-4 text-center">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhuma consulta encontrada</h3>
@@ -331,6 +376,12 @@ const Consultas: React.FC = () => {
                 'Tente ajustar os filtros para encontrar consultas.' :
                 'Você ainda não possui consultas agendadas.'}
             </p>
+            <button
+              onClick={() => refetch()}
+              className="mt-4 px-4 py-2 bg-azure-vivido text-white rounded-lg hover:bg-azul-principal transition-colors"
+            >
+              Atualizar lista
+            </button>
           </div>
         ) : (
           <div className="divide-y divide-gray-200">

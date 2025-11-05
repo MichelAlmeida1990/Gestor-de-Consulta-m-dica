@@ -865,7 +865,23 @@ app.get('/api/pacientes/:id', AuthService.authenticateToken, async (req: Request
 // Listar consultas
 app.get('/api/consultas', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    const usuario = req.usuario!;
+    console.log('📋 Endpoint /api/consultas chamado');
+    console.log('👤 Usuário autenticado:', req.usuario ? 'Sim' : 'Não');
+    
+    if (!req.usuario) {
+      console.log('❌ req.usuario não está definido!');
+      res.status(401).json({
+        success: false,
+        error: {
+          message: 'Usuário não autenticado',
+          statusCode: 401
+        }
+      });
+      return;
+    }
+    
+    const usuario = req.usuario;
+    console.log('👤 Usuário:', { id: usuario.id, email: usuario.email, tipo: usuario.tipo });
     
     const { paciente_id, medico_id, status, data_inicio, data_fim, busca } = req.query;
     
@@ -880,6 +896,20 @@ app.get('/api/consultas', AuthService.authenticateToken, async (req: Request, re
       );
       if (paciente) {
         filtros.paciente_id = paciente.id;
+        console.log('✅ Paciente encontrado - ID:', paciente.id);
+      } else {
+        console.log('❌ Paciente não encontrado para usuario_id:', usuario.id);
+        // Se não encontrou paciente, criar um registro para o usuário
+        try {
+          const result = await database.run(
+            'INSERT INTO pacientes (usuario_id) VALUES (?)',
+            [usuario.id]
+          );
+          filtros.paciente_id = result.lastID;
+          console.log('✅ Registro de paciente criado automaticamente - ID:', result.lastID);
+        } catch (err) {
+          console.error('❌ Erro ao criar registro de paciente:', err);
+        }
       }
     } else if (usuario.tipo === 'medico') {
       // Médicos só veem suas próprias consultas
@@ -889,13 +919,22 @@ app.get('/api/consultas', AuthService.authenticateToken, async (req: Request, re
       );
       if (medico) {
         filtros.medico_id = medico.id;
+        console.log('✅ Médico encontrado - ID:', medico.id);
+      } else {
+        console.log('❌ Médico não encontrado para usuario_id:', usuario.id);
       }
     }
     // Admin vê todas as consultas (sem filtro adicional)
 
-    // Aplicar filtros adicionais
-    if (paciente_id) filtros.paciente_id = paciente_id;
-    if (medico_id) filtros.medico_id = medico_id;
+    // Aplicar filtros adicionais (sobrescrever se fornecidos)
+    if (paciente_id) {
+      filtros.paciente_id = parseInt(paciente_id as string);
+      console.log('📋 Filtro paciente_id fornecido:', filtros.paciente_id);
+    }
+    if (medico_id) {
+      filtros.medico_id = parseInt(medico_id as string);
+      console.log('📋 Filtro medico_id fornecido:', filtros.medico_id);
+    }
     if (status) filtros.status = status;
     if (data_inicio) filtros.data_inicio = data_inicio;
     if (data_fim) filtros.data_fim = data_fim;
@@ -907,7 +946,35 @@ app.get('/api/consultas', AuthService.authenticateToken, async (req: Request, re
     const consultas = await ConsultaService.listar(filtros);
     
     console.log(`✅ ${consultas.length} consultas encontradas`);
-    console.log('📝 IDs das consultas encontradas:', consultas.map((c: any) => c.id).join(', '));
+    if (consultas.length > 0) {
+      console.log('📝 IDs das consultas encontradas:', consultas.map((c: any) => c.id).join(', '));
+      console.log('📝 Primeira consulta:', {
+        id: consultas[0].id,
+        paciente_id: consultas[0].paciente_id,
+        paciente_usuario_id: consultas[0].paciente?.usuario_id
+      });
+    } else {
+      console.log('⚠️ Nenhuma consulta encontrada com os filtros aplicados');
+      console.log('🔍 Filtros aplicados:', filtros);
+      
+      // Debug: verificar se há consultas sem filtro
+      const todasConsultas = await ConsultaService.listar({});
+      console.log(`🔍 Total de consultas no banco (sem filtro): ${todasConsultas.length}`);
+      if (todasConsultas.length > 0) {
+        console.log('🔍 Primeira consulta (sem filtro):', {
+          id: todasConsultas[0].id,
+          paciente_id: todasConsultas[0].paciente_id,
+          paciente_usuario_id: todasConsultas[0].paciente?.usuario_id
+        });
+      }
+    }
+    
+    // Log da resposta final
+    console.log('📤 Enviando resposta:', {
+      success: true,
+      consultas_count: consultas.length,
+      primeiro_id: consultas.length > 0 ? consultas[0].id : null
+    });
     
     res.json({
       success: true,
@@ -989,7 +1056,7 @@ app.post('/api/consultas', async (req: Request, res: Response): Promise<void> =>
     
     if (!pacienteId && usuario.tipo === 'paciente') {
       console.log('🔍 Buscando paciente para usuario_id:', usuario.id);
-      const paciente = await database.get(
+      let paciente = await database.get(
         'SELECT id FROM pacientes WHERE usuario_id = ?',
         [usuario.id]
       );
@@ -998,6 +1065,25 @@ app.post('/api/consultas', async (req: Request, res: Response): Promise<void> =>
         console.log('✅ Paciente encontrado com ID:', pacienteId);
       } else {
         console.log('❌ Paciente não encontrado para usuario_id:', usuario.id);
+        // Criar registro de paciente automaticamente se não existir
+        try {
+          const result = await database.run(
+            'INSERT INTO pacientes (usuario_id) VALUES (?)',
+            [usuario.id]
+          );
+          pacienteId = result.lastID;
+          console.log('✅ Registro de paciente criado automaticamente - ID:', pacienteId);
+        } catch (err) {
+          console.error('❌ Erro ao criar registro de paciente:', err);
+          res.status(400).json({
+            success: false,
+            error: {
+              message: 'Erro ao criar registro de paciente. Entre em contato com o suporte.',
+              statusCode: 400
+            }
+          });
+          return;
+        }
       }
     } else if (pacienteId && usuario.tipo === 'admin') {
       // Se admin está criando para outro paciente, verificar se o ID é válido

@@ -19,14 +19,24 @@ const DashboardPaciente: React.FC = () => {
   const { usuario } = useAuth();
 
   // Buscar consultas do paciente
+  // O backend filtra automaticamente por paciente_id baseado no token
+  // Não precisa passar paciente_id, o backend já filtra pelo usuário logado
   const { data: consultasData } = useQuery(
     'paciente-dashboard-consultas',
     () => consultaService.listar({ 
       page: 1, 
-      limit: 10,
-      paciente_id: usuario?.id
+      limit: 10
+      // Não passar paciente_id - o backend filtra automaticamente pelo token
     }),
-    { enabled: !!usuario?.id }
+    { 
+      enabled: !!usuario?.id,
+      onSuccess: (data) => {
+        console.log('✅ Dashboard - Consultas carregadas:', data?.data?.consultas?.length || 0, 'consultas');
+      },
+      onError: (error) => {
+        console.error('❌ Dashboard - Erro ao carregar consultas:', error);
+      }
+    }
   );
 
   const { data: notificacoesData } = useQuery(
@@ -35,9 +45,24 @@ const DashboardPaciente: React.FC = () => {
     { enabled: !!usuario }
   );
 
-  const consultas = Array.isArray(consultasData?.data?.consultas) ? consultasData.data.consultas : 
-                   Array.isArray(consultasData?.data) ? consultasData.data : [];
+  // Tratar resposta da API - pode vir em diferentes formatos
+  let consultas: any[] = [];
+  if (consultasData?.success && consultasData?.data) {
+    if (Array.isArray(consultasData.data)) {
+      consultas = consultasData.data;
+    } else if (consultasData.data.consultas && Array.isArray(consultasData.data.consultas)) {
+      consultas = consultasData.data.consultas;
+    }
+  }
+  
   const notificacoes = Array.isArray(notificacoesData?.data) ? notificacoesData.data : [];
+  
+  // Debug
+  React.useEffect(() => {
+    console.log('🔍 Dashboard - Consultas Data:', consultasData);
+    console.log('🔍 Dashboard - Consultas Array:', consultas);
+    console.log('🔍 Dashboard - Quantidade de consultas:', consultas.length);
+  }, [consultasData, consultas]);
 
   // Calcular estatísticas específicas para o paciente
   const consultasHoje = consultas.filter((c: any) => 
@@ -284,9 +309,11 @@ const DashboardPaciente: React.FC = () => {
                         <Stethoscope className="h-6 w-6 text-white" />
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-900">{consulta.medico?.nome}</p>
-                        <p className="text-sm text-gray-600">{consulta.medico?.especialidade}</p>
-                        <p className="text-xs text-gray-500">{consulta.tipo_consulta}</p>
+                        <p className="font-semibold text-gray-900">
+                          {consulta.medico?.usuario?.nome || consulta.medico?.nome || 'Nome não disponível'}
+                        </p>
+                        <p className="text-sm text-gray-600">{consulta.medico?.especialidade || 'Especialidade não informada'}</p>
+                        <p className="text-xs text-gray-500">{consulta.tipo_consulta || consulta.tipo || 'Consulta'}</p>
                       </div>
                     </div>
                     <div className="text-right">

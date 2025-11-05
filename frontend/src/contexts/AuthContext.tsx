@@ -73,7 +73,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       console.log('🔐 Iniciando login...');
       
-      const response = await fetch('http://localhost:3001/api/auth/login', {
+      // Usar a mesma URL base da API
+      const API_BASE_URL = 'http://localhost:54112/api';
+      
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

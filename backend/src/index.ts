@@ -19,11 +19,14 @@ declare global {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware CORS - Permitir todas as origens em desenvolvimento
+// Middleware CORS - Configurar ANTES de qualquer outro middleware
+// Permitir todas as origens em desenvolvimento
 app.use(cors({
   origin: function (origin, callback) {
-    // Permitir requisições sem origin (Postman, etc)
-    if (!origin) return callback(null, true);
+    // Permitir requisições sem origin (Postman, mobile apps, etc)
+    if (!origin) {
+      return callback(null, true);
+    }
     
     // Permitir localhost em qualquer porta
     if (origin.match(/^http:\/\/localhost:\d+$/)) {
@@ -42,16 +45,21 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true); // Permitir todas em desenvolvimento
+      // Em desenvolvimento, permitir todas as origens
+      callback(null, true);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // 24 horas
 }));
+
+// Handler explícito para requisições OPTIONS (preflight)
+app.options('*', cors());
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -855,40 +863,9 @@ app.get('/api/pacientes/:id', AuthService.authenticateToken, async (req: Request
 // ==================== CONSULTAS ====================
 
 // Listar consultas
-app.get('/api/consultas', async (req: Request, res: Response): Promise<void> => {
+app.get('/api/consultas', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    // Verificação manual de token (sem middleware)
-    const authHeader = req.headers['authorization'];
-    const token = authHeader?.split(' ')[1];
-    
-    if (!token) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token não fornecido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    let decoded: any;
-    try {
-      decoded = AuthService.verifyToken(token);
-    } catch (tokenError) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token inválido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    // Buscar usuário do token
-    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
-    if (!usuario) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Usuário não encontrado', statusCode: 401 }
-      });
-      return;
-    }
+    const usuario = req.usuario!;
     
     const { paciente_id, medico_id, status, data_inicio, data_fim, busca } = req.query;
     
@@ -2703,39 +2680,9 @@ app.post('/api/faturas', async (req: Request, res: Response): Promise<void> => {
 // ==================== NOTIFICAÇÕES ====================
 
 // Listar notificações
-app.get('/api/notificacoes', async (req: Request, res: Response): Promise<void> => {
+app.get('/api/notificacoes', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    // Verificação manual de token
-    const authHeader = req.headers['authorization'];
-    const token = authHeader?.split(' ')[1];
-    
-    if (!token) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token não fornecido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    let decoded: any;
-    try {
-      decoded = AuthService.verifyToken(token);
-    } catch (tokenError) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token inválido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
-    if (!usuario) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Usuário não encontrado', statusCode: 401 }
-      });
-      return;
-    }
+    const usuario = req.usuario!;
     
     console.log('📬 Listando notificações do usuário:', usuario.email);
     
@@ -2764,39 +2711,9 @@ app.get('/api/notificacoes', async (req: Request, res: Response): Promise<void> 
 });
 
 // Marcar notificação como lida
-app.put('/api/notificacoes/:id/lida', async (req: Request, res: Response): Promise<void> => {
+app.put('/api/notificacoes/:id/lida', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    // Verificação manual de token
-    const authHeader = req.headers['authorization'];
-    const token = authHeader?.split(' ')[1];
-    
-    if (!token) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token não fornecido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    let decoded: any;
-    try {
-      decoded = AuthService.verifyToken(token);
-    } catch (tokenError) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token inválido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
-    if (!usuario) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Usuário não encontrado', statusCode: 401 }
-      });
-      return;
-    }
+    const usuario = req.usuario!;
     
     const id = parseInt(req.params.id);
     
@@ -2842,39 +2759,9 @@ app.put('/api/notificacoes/:id/lida', async (req: Request, res: Response): Promi
 });
 
 // Marcar todas as notificações como lidas
-app.put('/api/notificacoes/marcar-todas-lidas', async (req: Request, res: Response): Promise<void> => {
+app.put('/api/notificacoes/marcar-todas-lidas', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    // Verificação manual de token
-    const authHeader = req.headers['authorization'];
-    const token = authHeader?.split(' ')[1];
-    
-    if (!token) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token não fornecido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    let decoded: any;
-    try {
-      decoded = AuthService.verifyToken(token);
-    } catch (tokenError) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token inválido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
-    if (!usuario) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Usuário não encontrado', statusCode: 401 }
-      });
-      return;
-    }
+    const usuario = req.usuario!;
     
     await database.run(`
       UPDATE notificacoes 
@@ -2901,39 +2788,9 @@ app.put('/api/notificacoes/marcar-todas-lidas', async (req: Request, res: Respon
 });
 
 // Contar notificações não lidas
-app.get('/api/notificacoes/nao-lidas', async (req: Request, res: Response): Promise<void> => {
+app.get('/api/notificacoes/nao-lidas', AuthService.authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    // Verificação manual de token
-    const authHeader = req.headers['authorization'];
-    const token = authHeader?.split(' ')[1];
-    
-    if (!token) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token não fornecido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    let decoded: any;
-    try {
-      decoded = AuthService.verifyToken(token);
-    } catch (tokenError) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Token inválido', statusCode: 401 }
-      });
-      return;
-    }
-    
-    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
-    if (!usuario) {
-      res.status(401).json({
-        success: false,
-        error: { message: 'Usuário não encontrado', statusCode: 401 }
-      });
-      return;
-    }
+    const usuario = req.usuario!;
     
     const count = await database.get(`
       SELECT COUNT(*) as count FROM notificacoes 

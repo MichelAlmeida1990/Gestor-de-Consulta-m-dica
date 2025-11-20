@@ -35,7 +35,7 @@ const Agendamento: React.FC = () => {
     : todosMedicos;
 
   // Buscar salas disponíveis
-  const { data: salasData, isLoading: isLoadingSalas, error: errorSalas } = useQuery('salas', () => salaService.listar(), {
+  const { data: salasData } = useQuery('salas', () => salaService.listar(), {
     onSuccess: (data) => {
       console.log('✅ Salas carregadas:', data);
     },

@@ -63,8 +63,8 @@ api.interceptors.request.use(
 );
 
 // Flag para evitar múltiplos redirecionamentos (persiste entre requisições)
-let isRedirecting = false;
-let redirectTimeout: NodeJS.Timeout | null = null;
+// let isRedirecting = false;
+// let redirectTimeout: NodeJS.Timeout | null = null;
 
 // Flag para indicar que acabou de fazer login (evita toast de sessão expirada imediatamente)
 let justLoggedIn = false;
@@ -110,8 +110,8 @@ api.interceptors.response.use(
       
       // Só limpar se não estiver já na página de login ou register
       // e se não estiver já redirecionando
-      const currentPath = window.location.pathname;
-      const isPublicRoute = currentPath === '/login' || currentPath === '/register';
+      // const currentPath = window.location.pathname;
+      // const isPublicRoute = currentPath === '/login' || currentPath === '/register';
       
       // NÃO limpar nem mostrar toast se acabou de fazer login (evita conflito)
       if (justLoggedIn) {

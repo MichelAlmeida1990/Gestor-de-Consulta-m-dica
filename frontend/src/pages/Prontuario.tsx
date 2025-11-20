@@ -8,8 +8,6 @@ import {
   Stethoscope, 
   Pill, 
   Activity,
-  Download,
-  Edit,
   Plus,
   CheckCircle,
   Maximize2,
@@ -123,7 +121,7 @@ const Prontuario: React.FC = () => {
   const [modoEdicao, setModoEdicao] = useState(false);
   const queryClient = useQueryClient();
   
-  const { register: registerForm, handleSubmit: handleSubmitForm, setValue, watch, formState: { errors } } = useForm();
+  const { register: registerForm, handleSubmit: handleSubmitForm, setValue } = useForm();
 
   // Buscar pacientes da API
   const { data: pacientesData, isLoading: carregandoPacientes, error: pacientesError } = useQuery(

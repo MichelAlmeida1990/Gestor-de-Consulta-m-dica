@@ -15,7 +15,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { consultaService, pagamentoService, faturaService } from '../services/api';
+import { consultaService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Consulta {
@@ -115,9 +115,9 @@ const Consultas: React.FC = () => {
     console.log('🔍 Usuario:', usuario);
     if (consultas.length > 0) {
       console.log('🔍 Primeira consulta:', consultas[0]);
-      console.log('🔍 Primeira consulta ID:', consultas[0].id);
-      console.log('🔍 Primeira consulta paciente_id:', consultas[0].paciente?.id);
-      console.log('🔍 Primeira consulta paciente_usuario_id:', consultas[0].paciente?.usuario_id);
+      // console.log('🔍 Primeira consulta ID:', consultas[0].id);
+      // console.log('🔍 Primeira consulta paciente_id:', consultas[0].paciente?.id);
+      // console.log('🔍 Primeira consulta paciente_usuario_id:', (consultas[0].paciente as any)?.usuario_id);
     } else {
       console.log('⚠️ NENHUMA CONSULTA ENCONTRADA!');
       console.log('⚠️ Verifique se há consultas no banco para este usuário');
@@ -180,15 +180,15 @@ const Consultas: React.FC = () => {
     }
   };
 
-  const handleGerarFatura = (consulta: Consulta) => {
-    const valorDesconto = prompt('Valor de desconto (opcional):') || '0';
-    const observacoes = prompt('Observações (opcional):') || '';
+  const handleGerarFatura = (_consulta: Consulta) => {
+    // const valorDesconto = prompt('Valor de desconto (opcional):') || '0';
+    // const observacoes = prompt('Observações (opcional):') || '';
     
     // Implementar geração de fatura
     toast.success('Funcionalidade de geração de fatura será implementada em breve!');
   };
 
-  const handleCriarPagamento = (consulta: Consulta) => {
+  const handleCriarPagamento = (_consulta: Consulta) => {
     const valor = prompt('Valor do pagamento:');
     const formaPagamento = prompt('Forma de pagamento (dinheiro, cartao_credito, cartao_debito, pix, transferencia):');
     
@@ -448,7 +448,7 @@ const Consultas: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4 text-gray-400" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{consulta.tipo_consulta || consulta.tipo || 'Consulta'}</p>
+                          <p className="text-sm font-medium text-gray-900">{consulta.tipo_consulta || (consulta as any).tipo || 'Consulta'}</p>
                           <p className="text-xs text-gray-500">
                             {consulta.sala ? `Sala: ${consulta.sala.nome}${consulta.sala.numero ? ` (${consulta.sala.numero})` : ''}` : 'Sem sala definida'}
                           </p>
@@ -610,7 +610,7 @@ const Consultas: React.FC = () => {
 
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Tipo de Consulta</h4>
-                    <p className="text-gray-700">{consultaSelecionada.tipo_consulta || consultaSelecionada.tipo || 'Consulta'}</p>
+                    <p className="text-gray-700">{consultaSelecionada.tipo_consulta || (consultaSelecionada as any).tipo || 'Consulta'}</p>
                   </div>
 
                   {consultaSelecionada.sala && (

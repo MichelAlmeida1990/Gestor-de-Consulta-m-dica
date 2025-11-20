@@ -13,10 +13,7 @@ import {
   CreditCard,
   Shield,
   Clock,
-  CheckCircle2,
-  Heart,
-  Pill,
-  UserCheck
+  CheckCircle2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

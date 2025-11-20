@@ -258,35 +258,35 @@ const Financeiro: React.FC = () => {
 
   // Calcular estatísticas de pagamentos
   const estatisticasPagamentos = React.useMemo(() => {
-    const total = pagamentos.reduce((sum, p) => sum + (p.valor || 0), 0);
+    const total = pagamentos.reduce((sum: number, p: any) => sum + (p.valor || 0), 0);
     const pago = pagamentos
-      .filter(p => p.status === 'pago')
-      .reduce((sum, p) => sum + (p.valor || 0), 0);
+      .filter((p: any) => p.status === 'pago')
+      .reduce((sum: number, p: any) => sum + (p.valor || 0), 0);
     const pendente = pagamentos
-      .filter(p => p.status === 'pendente')
-      .reduce((sum, p) => sum + (p.valor || 0), 0);
+      .filter((p: any) => p.status === 'pendente')
+      .reduce((sum: number, p: any) => sum + (p.valor || 0), 0);
     const totalPagamentos = pagamentos.length;
-    const pagamentosPagos = pagamentos.filter(p => p.status === 'pago').length;
-    const pagamentosPendentes = pagamentos.filter(p => p.status === 'pendente').length;
+    const pagamentosPagos = pagamentos.filter((p: any) => p.status === 'pago').length;
+    const pagamentosPendentes = pagamentos.filter((p: any) => p.status === 'pendente').length;
 
     return { total, pago, pendente, totalPagamentos, pagamentosPagos, pagamentosPendentes };
   }, [pagamentos]);
 
   // Calcular estatísticas de faturas
   const estatisticasFaturas = React.useMemo(() => {
-    const total = faturas.reduce((sum, f) => sum + (f.valor_final || 0), 0);
+    const total = faturas.reduce((sum: number, f: any) => sum + (f.valor_final || 0), 0);
     const paga = faturas
-      .filter(f => f.status === 'paga')
-      .reduce((sum, f) => sum + (f.valor_final || 0), 0);
+      .filter((f: any) => f.status === 'paga')
+      .reduce((sum: number, f: any) => sum + (f.valor_final || 0), 0);
     const pendente = faturas
-      .filter(f => f.status === 'pendente')
-      .reduce((sum, f) => sum + (f.valor_final || 0), 0);
+      .filter((f: any) => f.status === 'pendente')
+      .reduce((sum: number, f: any) => sum + (f.valor_final || 0), 0);
     const vencida = faturas
-      .filter(f => f.status === 'vencida')
-      .reduce((sum, f) => sum + (f.valor_final || 0), 0);
+      .filter((f: any) => f.status === 'vencida')
+      .reduce((sum: number, f: any) => sum + (f.valor_final || 0), 0);
     const totalFaturas = faturas.length;
-    const faturasPagas = faturas.filter(f => f.status === 'paga').length;
-    const faturasPendentes = faturas.filter(f => f.status === 'pendente').length;
+    const faturasPagas = faturas.filter((f: any) => f.status === 'paga').length;
+    const faturasPendentes = faturas.filter((f: any) => f.status === 'pendente').length;
 
     return { total, paga, pendente, vencida, totalFaturas, faturasPagas, faturasPendentes };
   }, [faturas]);
@@ -793,7 +793,7 @@ const Financeiro: React.FC = () => {
                         if (!consulta || !consulta.id) return null;
                         return (
                           <option key={consulta.id} value={consulta.id}>
-                            Consulta #{consulta.id} - {formatDate(consulta.data)} - {formatCurrency(consulta.preco || consulta.valor || 0)}
+                            Consulta #{consulta.id} - {formatDate(consulta.data)} - {formatCurrency((consulta as any).preco || (consulta as any).valor || 0)}
                           </option>
                         );
                       })
@@ -912,7 +912,7 @@ const Financeiro: React.FC = () => {
                         if (!consulta || !consulta.id) return null;
                         return (
                           <option key={consulta.id} value={consulta.id}>
-                            Consulta #{consulta.id} - {formatDate(consulta.data)} - {formatCurrency(consulta.preco || consulta.valor || 0)}
+                            Consulta #{consulta.id} - {formatDate(consulta.data)} - {formatCurrency((consulta as any).preco || (consulta as any).valor || 0)}
                           </option>
                         );
                       })

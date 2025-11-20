@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import React, { useState } from 'react';
+import { useQuery } from 'react-query';
 import { 
   Calendar, 
   Clock, 
@@ -16,7 +16,7 @@ import {
   Mail,
   Eye
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+// import toast from 'react-hot-toast';
 import { consultaService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -44,7 +44,7 @@ interface Consulta {
 
 const AgendaMedica: React.FC = () => {
   const { usuario, medico } = useAuth();
-  const queryClient = useQueryClient();
+  // const queryClient = useQueryClient();
   const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
   const [consultaSelecionada, setConsultaSelecionada] = useState<Consulta | null>(null);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
@@ -65,7 +65,7 @@ const AgendaMedica: React.FC = () => {
   };
 
   // Buscar consultas do médico para a data selecionada
-  const { data: consultasData, isLoading, refetch } = useQuery(
+  const { data: consultasData, isLoading } = useQuery(
     ['agenda-medica', dataSelecionada],
     () => consultaService.listar({ 
       page: 1, 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from 'react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { consultaService, pagamentoService, faturaService, usuarioService, medicoService } from '../services/api';
-import { toast } from 'react-hot-toast';
+// import { toast } from 'react-hot-toast';
 
 const Estatisticas: React.FC = () => {
   const { usuario } = useAuth();

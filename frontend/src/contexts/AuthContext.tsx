@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { useNavigate } from 'react-router-dom';
 import { Usuario, Medico, AuthContextType, RegisterForm } from '../types';
 import toast from 'react-hot-toast';
+import { authService, setJustLoggedIn } from '../services/api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -73,18 +74,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       console.log('🔐 Iniciando login...');
       
-      // Usar a mesma URL base da API
-      const API_BASE_URL = 'http://localhost:54112/api';
-      
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, senha }),
-      });
-      
-      const data = await response.json();
+      // Usar o authService que já está configurado com axios e interceptors
+      const data = await authService.login(email, senha);
       console.log('📡 Resposta do login:', data);
       
       if (data.success) {
@@ -110,9 +101,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         toast.success('Login realizado com sucesso!');
         
         // Marcar que acabou de fazer login (evita toast de sessão expirada imediatamente)
-        if (typeof window !== 'undefined' && (window as any).setJustLoggedIn) {
-          (window as any).setJustLoggedIn();
-        }
+        setJustLoggedIn();
         
         // Aguardar um momento para garantir que o estado foi atualizado e evitar race conditions
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -131,9 +120,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         toast.error(data.error?.message || 'Erro ao fazer login');
         throw new Error(data.error?.message || 'Erro ao fazer login');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erro no login:', error);
-      toast.error('Erro de conexão com o servidor');
+      // O toast já é exibido pelo interceptor do axios
+      if (!error.response) {
+        toast.error('Erro de conexão com o servidor');
+      }
       throw error;
     } finally {
       console.log('🏁 Finalizando login, setIsLoading(false)');
@@ -145,18 +137,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Usar a mesma URL base da API
-      const API_BASE_URL = 'http://localhost:54112/api';
-      
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dados),
-      });
-      
-      const data = await response.json();
+      // Usar o authService que já está configurado com axios e interceptors
+      const data = await authService.register(dados);
       
       if (data.success) {
         const { token: newToken, usuario: newUsuario } = data.data;
@@ -174,9 +156,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         toast.error(data.error?.message || 'Erro no cadastro');
         throw new Error(data.error?.message || 'Erro no cadastro');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro no cadastro:', error);
-      toast.error('Erro ao fazer cadastro. Tente novamente.');
+      // O toast já é exibido pelo interceptor do axios
+      if (!error.response) {
+        toast.error('Erro ao fazer cadastro. Tente novamente.');
+      }
       throw error;
     } finally {
       setIsLoading(false);

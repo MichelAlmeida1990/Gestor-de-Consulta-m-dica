@@ -49,27 +49,27 @@ const DashboardAdmin: React.FC = () => {
   const medicosAtivos = medicos.filter((m: any) => m.ativo).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className="w-full space-y-6">
       {/* Hero Section com imagem de fundo */}
-      <div className="relative bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 rounded-2xl shadow-2xl overflow-hidden mb-8">
+      <div className="relative bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 rounded-2xl shadow-2xl overflow-hidden">
         <div className="absolute inset-0 bg-black opacity-20"></div>
-        <div className="relative px-8 py-12">
-          <div className="flex items-center justify-between">
-            <div className="text-white">
-              <h1 className="text-4xl font-bold mb-4 flex items-center">
-                <span className="text-5xl mr-4">👨‍💼</span>
+        <div className="relative px-6 md:px-8 py-8 md:py-12">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="text-white flex-1">
+              <h1 className="text-3xl md:text-4xl font-bold mb-3 md:mb-4 flex items-center">
+                <span className="text-4xl md:text-5xl mr-3 md:mr-4">👨‍💼</span>
                 Painel Administrativo
               </h1>
-              <p className="text-xl text-blue-100 mb-2">
+              <p className="text-lg md:text-xl text-blue-100 mb-2">
                 Visão geral completa do sistema de agendamento médico
               </p>
-              <p className="text-blue-200">
+              <p className="text-sm md:text-base text-blue-200">
                 Gerencie médicos, pacientes e consultas em tempo real
               </p>
             </div>
-            <div className="hidden md:block">
-              <div className="w-32 h-32 bg-white bg-opacity-10 rounded-full flex items-center justify-center backdrop-blur-sm">
-                <span className="text-6xl">🏥</span>
+            <div className="hidden md:block flex-shrink-0">
+              <div className="w-24 h-24 md:w-32 md:h-32 bg-white bg-opacity-10 rounded-full flex items-center justify-center backdrop-blur-sm">
+                <span className="text-5xl md:text-6xl">🏥</span>
               </div>
             </div>
           </div>
@@ -77,7 +77,7 @@ const DashboardAdmin: React.FC = () => {
       </div>
 
       {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Total de Consultas */}
         <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-6 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
@@ -136,7 +136,7 @@ const DashboardAdmin: React.FC = () => {
       </div>
 
       {/* Status das Consultas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-green-500">
           <div className="flex items-center justify-between">
             <div>

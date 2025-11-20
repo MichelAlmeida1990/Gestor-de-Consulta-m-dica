@@ -2391,11 +2391,12 @@ app.get('/api/pagamentos', async (req: Request, res: Response): Promise<void> =>
     console.log('💰 Listando pagamentos para usuário:', usuario.email);
     
     let query = `
-      SELECT p.*, c.data, c.hora_inicio, c.hora_fim, c.tipo_consulta,
+      SELECT p.*, c.data, c.horario, c.tipo_consulta,
              u_p.nome as paciente_nome, u_m.nome as medico_nome
       FROM pagamentos p
       JOIN consultas c ON p.consulta_id = c.id
-      JOIN usuarios u_p ON c.paciente_id = u_p.id
+      JOIN pacientes pac ON c.paciente_id = pac.id
+      JOIN usuarios u_p ON pac.usuario_id = u_p.id
       JOIN medicos m ON c.medico_id = m.id
       JOIN usuarios u_m ON m.usuario_id = u_m.id
     `;
@@ -2404,10 +2405,10 @@ app.get('/api/pagamentos', async (req: Request, res: Response): Promise<void> =>
     
     // Filtrar por tipo de usuário
     if (usuario.tipo === 'paciente') {
-      query += ' WHERE c.paciente_id = ?';
+      query += ' WHERE pac.usuario_id = ?';
       params.push(usuario.id);
     } else if (usuario.tipo === 'medico') {
-      query += ' WHERE c.medico_id = (SELECT id FROM medicos WHERE usuario_id = ?)';
+      query += ' WHERE m.usuario_id = ?';
       params.push(usuario.id);
     }
     // Admin vê todos
@@ -2473,9 +2474,10 @@ app.post('/api/pagamentos', async (req: Request, res: Response): Promise<void> =
     
     // Verificar se a consulta existe e pertence ao usuário
     const consulta = await database.get(`
-      SELECT c.*, u_p.nome as paciente_nome, u_m.nome as medico_nome
+      SELECT c.*, pac.usuario_id as paciente_usuario_id, u_p.nome as paciente_nome, u_m.nome as medico_nome
       FROM consultas c
-      JOIN usuarios u_p ON c.paciente_id = u_p.id
+      JOIN pacientes pac ON c.paciente_id = pac.id
+      JOIN usuarios u_p ON pac.usuario_id = u_p.id
       JOIN medicos m ON c.medico_id = m.id
       JOIN usuarios u_m ON m.usuario_id = u_m.id
       WHERE c.id = ?
@@ -2493,7 +2495,7 @@ app.post('/api/pagamentos', async (req: Request, res: Response): Promise<void> =
     }
     
     // Verificar permissões
-    if (usuario.tipo === 'paciente' && consulta.paciente_id !== usuario.id) {
+    if (usuario.tipo === 'paciente' && consulta.paciente_usuario_id !== usuario.id) {
       res.status(403).json({
         success: false,
         error: {
@@ -2690,11 +2692,12 @@ app.get('/api/faturas', async (req: Request, res: Response): Promise<void> => {
     console.log('📄 Listando faturas para usuário:', usuario.email);
     
     let query = `
-      SELECT f.*, c.data, c.hora_inicio, c.hora_fim, c.tipo_consulta,
+      SELECT f.*, c.data, c.horario, c.tipo_consulta,
              u_p.nome as paciente_nome, u_m.nome as medico_nome
       FROM faturas f
       JOIN consultas c ON f.consulta_id = c.id
-      JOIN usuarios u_p ON f.paciente_id = u_p.id
+      JOIN pacientes pac ON f.paciente_id = pac.id
+      JOIN usuarios u_p ON pac.usuario_id = u_p.id
       JOIN medicos m ON f.medico_id = m.id
       JOIN usuarios u_m ON m.usuario_id = u_m.id
     `;
@@ -2703,10 +2706,10 @@ app.get('/api/faturas', async (req: Request, res: Response): Promise<void> => {
     
     // Filtrar por tipo de usuário
     if (usuario.tipo === 'paciente') {
-      query += ' WHERE f.paciente_id = ?';
+      query += ' WHERE pac.usuario_id = ?';
       params.push(usuario.id);
     } else if (usuario.tipo === 'medico') {
-      query += ' WHERE f.medico_id = (SELECT id FROM medicos WHERE usuario_id = ?)';
+      query += ' WHERE m.usuario_id = ?';
       params.push(usuario.id);
     }
     // Admin vê todas
@@ -2784,9 +2787,11 @@ app.post('/api/faturas', async (req: Request, res: Response): Promise<void> => {
     
     // Buscar dados da consulta
     const consulta = await database.get(`
-      SELECT c.*, u_p.nome as paciente_nome, u_m.nome as medico_nome, m.especialidade
+      SELECT c.*, pac.id as paciente_id_db, pac.usuario_id as paciente_usuario_id, 
+             u_p.nome as paciente_nome, u_m.nome as medico_nome, m.especialidade, m.id as medico_id_db
       FROM consultas c
-      JOIN usuarios u_p ON c.paciente_id = u_p.id
+      JOIN pacientes pac ON c.paciente_id = pac.id
+      JOIN usuarios u_p ON pac.usuario_id = u_p.id
       JOIN medicos m ON c.medico_id = m.id
       JOIN usuarios u_m ON m.usuario_id = u_m.id
       WHERE c.id = ?
@@ -2820,7 +2825,7 @@ app.post('/api/faturas', async (req: Request, res: Response): Promise<void> => {
       return;
     }
     
-    const valorTotal = consulta.preco || 0;
+    const valorTotal = consulta.valor || consulta.preco || 0;
     const valorFinal = valorTotal - valor_desconto;
     
     // Calcular data de vencimento
@@ -2833,8 +2838,8 @@ app.post('/api/faturas', async (req: Request, res: Response): Promise<void> => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       consulta_id,
-      consulta.paciente_id,
-      consulta.medico_id,
+      consulta.paciente_id_db,
+      consulta.medico_id_db,
       valorTotal,
       valor_desconto,
       valorFinal,
@@ -2849,8 +2854,8 @@ app.post('/api/faturas', async (req: Request, res: Response): Promise<void> => {
       data: {
         id: result.lastID,
         consulta_id,
-        paciente_id: consulta.paciente_id,
-        medico_id: consulta.medico_id,
+        paciente_id: consulta.paciente_id_db,
+        medico_id: consulta.medico_id_db,
         valor_total: valorTotal,
         valor_desconto,
         valor_final: valorFinal,
@@ -2863,6 +2868,374 @@ app.post('/api/faturas', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('❌ Erro ao gerar fatura:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// ==================== CONFIGURAÇÕES ====================
+
+// Listar configurações
+app.get('/api/configuracoes', async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Verificação manual de token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Usuário não encontrado', statusCode: 401 }
+      });
+      return;
+    }
+    
+    // Apenas admin pode ver todas as configurações
+    if (usuario.tipo !== 'admin') {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Apenas administradores podem visualizar configurações',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    const configuracoes = await database.all('SELECT * FROM configuracoes ORDER BY chave ASC');
+    
+    res.json({
+      success: true,
+      data: configuracoes
+    });
+  } catch (error) {
+    console.error('❌ Erro ao listar configurações:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Buscar configuração por chave
+app.get('/api/configuracoes/:chave', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario || usuario.tipo !== 'admin') {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Apenas administradores podem visualizar configurações',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    const chave = req.params.chave;
+    const configuracao = await database.get('SELECT * FROM configuracoes WHERE chave = ?', [chave]);
+    
+    if (!configuracao) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Configuração não encontrada',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    res.json({
+      success: true,
+      data: configuracao
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar configuração:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Criar configuração
+app.post('/api/configuracoes', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario || usuario.tipo !== 'admin') {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Apenas administradores podem criar configurações',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    const { chave, valor, descricao } = req.body;
+    
+    if (!chave || !valor) {
+      res.status(400).json({
+        success: false,
+        error: {
+          message: 'Chave e valor são obrigatórios',
+          statusCode: 400
+        }
+      });
+      return;
+    }
+    
+    // Verificar se já existe
+    const existente = await database.get('SELECT * FROM configuracoes WHERE chave = ?', [chave]);
+    if (existente) {
+      res.status(409).json({
+        success: false,
+        error: {
+          message: 'Já existe uma configuração com esta chave',
+          statusCode: 409
+        }
+      });
+      return;
+    }
+    
+    const result = await database.run(
+      'INSERT INTO configuracoes (chave, valor, descricao) VALUES (?, ?, ?)',
+      [chave, valor, descricao || null]
+    );
+    
+    const novaConfig = await database.get('SELECT * FROM configuracoes WHERE id = ?', [result.lastID]);
+    
+    res.status(201).json({
+      success: true,
+      data: novaConfig,
+      message: 'Configuração criada com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao criar configuração:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Atualizar configuração
+app.put('/api/configuracoes/:chave', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario || usuario.tipo !== 'admin') {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Apenas administradores podem atualizar configurações',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    const chave = req.params.chave;
+    const { valor, descricao } = req.body;
+    
+    // Verificar se existe
+    const existente = await database.get('SELECT * FROM configuracoes WHERE chave = ?', [chave]);
+    if (!existente) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Configuração não encontrada',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    await database.run(
+      'UPDATE configuracoes SET valor = ?, descricao = ?, updated_at = CURRENT_TIMESTAMP WHERE chave = ?',
+      [valor, descricao || existente.descricao, chave]
+    );
+    
+    const atualizada = await database.get('SELECT * FROM configuracoes WHERE chave = ?', [chave]);
+    
+    res.json({
+      success: true,
+      data: atualizada,
+      message: 'Configuração atualizada com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao atualizar configuração:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erro interno do servidor',
+        statusCode: 500
+      }
+    });
+  }
+});
+
+// Deletar configuração
+app.delete('/api/configuracoes/:chave', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader?.split(' ')[1];
+    
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token não fornecido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    let decoded: any;
+    try {
+      decoded = AuthService.verifyToken(token);
+    } catch (tokenError) {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Token inválido', statusCode: 401 }
+      });
+      return;
+    }
+    
+    const usuario = await database.get('SELECT * FROM usuarios WHERE id = ?', [decoded.id]);
+    if (!usuario || usuario.tipo !== 'admin') {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Apenas administradores podem remover configurações',
+          statusCode: 403
+        }
+      });
+      return;
+    }
+    
+    const chave = req.params.chave;
+    
+    // Verificar se existe
+    const existente = await database.get('SELECT * FROM configuracoes WHERE chave = ?', [chave]);
+    if (!existente) {
+      res.status(404).json({
+        success: false,
+        error: {
+          message: 'Configuração não encontrada',
+          statusCode: 404
+        }
+      });
+      return;
+    }
+    
+    await database.run('DELETE FROM configuracoes WHERE chave = ?', [chave]);
+    
+    res.json({
+      success: true,
+      message: 'Configuração removida com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao remover configuração:', error);
     res.status(500).json({
       success: false,
       error: {

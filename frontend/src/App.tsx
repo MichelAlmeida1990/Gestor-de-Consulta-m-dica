@@ -15,6 +15,8 @@ import Notificacoes from './pages/Notificacoes';
 import Prontuario from './pages/Prontuario';
 import Financeiro from './pages/Financeiro';
 import Admin from './pages/Admin';
+import Estatisticas from './pages/Estatisticas';
+import Configuracoes from './pages/Configuracoes';
 
 // Componentes de layout
 import Layout from './components/Layout';
@@ -168,8 +170,28 @@ const AppContent: React.FC = () => {
       />
       
       {/* Rotas apenas para admin */}
-      <Route 
-        path="/admin/*" 
+      <Route
+        path="/admin/estatisticas"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <Layout>
+              <Estatisticas />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/configuracoes"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <Layout>
+              <Configuracoes />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
         element={
           <ProtectedRoute requiredRole="admin">
             <Layout>

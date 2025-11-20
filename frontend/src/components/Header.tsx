@@ -52,11 +52,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
 
   return (
     <header className="h-16 bg-white/10 backdrop-blur-xl border-b border-white/20 shadow-lg sticky top-0 z-10">
-      <div className="px-6 h-full flex items-center justify-between">
+      <div className="px-4 md:px-6 h-full flex items-center justify-between gap-4">
         {/* Botão de toggle do sidebar */}
         <button
           onClick={onToggleSidebar}
-          className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm lg:hidden"
+          className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm lg:hidden flex-shrink-0"
         >
           {sidebarOpen ? (
             <X className="w-5 h-5" />
@@ -66,8 +66,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
         </button>
 
         {/* Título */}
-        <div className="flex items-center space-x-4">
-          <h1 className="text-xl font-semibold text-white">
+        <div className="flex items-center space-x-2 md:space-x-4 flex-1 min-w-0">
+          <h1 className="text-lg md:text-xl font-semibold text-white truncate">
             {usuario?.tipo === 'admin' && '👨‍💼 Painel Administrativo'}
             {usuario?.tipo === 'medico' && '👨‍⚕️ Painel do Médico'}
             {usuario?.tipo === 'paciente' && '👤 Meu Painel'}
@@ -76,7 +76,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
         </div>
 
         {/* Notificações e perfil */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
           {/* Notificações */}
           <div className="relative">
             <button className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm">
@@ -93,13 +93,13 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center space-x-3 p-2 hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm"
+              className="flex items-center space-x-2 md:space-x-3 p-2 hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm"
             >
-              <div className="w-10 h-10 bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg border border-white/30">
-                <User className="w-5 h-5 text-white" />
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg border border-white/30 flex-shrink-0">
+                <User className="w-4 h-4 md:w-5 md:h-5 text-white" />
               </div>
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-medium text-white">
+              <div className="flex flex-col text-left hidden md:flex">
+                <span className="text-sm font-medium text-white truncate max-w-[120px]">
                   {usuario?.nome}
                 </span>
                 <span className="text-xs text-white/80 capitalize">
@@ -108,7 +108,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, sidebarOpen }) => {
                   {usuario?.tipo === 'paciente' && 'Paciente'}
                 </span>
               </div>
-              <ChevronDown className={`w-4 h-4 text-white/80 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-white/80 transition-transform flex-shrink-0 hidden md:block ${showUserMenu ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Dropdown Menu */}

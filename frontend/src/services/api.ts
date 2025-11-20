@@ -1,8 +1,8 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import toast from 'react-hot-toast';
 
-// Configuração base da API - Backend na porta 54112
-const API_BASE_URL = 'http://localhost:54112/api';
+// Configuração base da API - Backend na porta 3001
+const API_BASE_URL = 'http://localhost:3001/api';
 
 // Log da configuração para debug
 console.log('🔗 API Base URL:', API_BASE_URL);

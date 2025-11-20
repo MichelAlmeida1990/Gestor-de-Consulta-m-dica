@@ -113,6 +113,53 @@ CREATE TABLE IF NOT EXISTS configuracoes (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tabela de pagamentos
+CREATE TABLE IF NOT EXISTS pagamentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    consulta_id INTEGER NOT NULL,
+    valor DECIMAL(10,2) NOT NULL,
+    forma_pagamento VARCHAR(50) NOT NULL,
+    status TEXT CHECK(status IN ('pendente', 'pago', 'cancelado', 'reembolsado')) DEFAULT 'pendente',
+    data_pagamento DATETIME,
+    data_vencimento DATE,
+    observacoes TEXT,
+    comprovante_url TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (consulta_id) REFERENCES consultas(id) ON DELETE CASCADE
+);
+
+-- Tabela de faturas
+CREATE TABLE IF NOT EXISTS faturas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero_fatura VARCHAR(50) UNIQUE,
+    consulta_id INTEGER NOT NULL,
+    paciente_id INTEGER NOT NULL,
+    medico_id INTEGER NOT NULL,
+    valor_total DECIMAL(10,2) NOT NULL,
+    valor_desconto DECIMAL(10,2) DEFAULT 0,
+    valor_final DECIMAL(10,2) NOT NULL,
+    status TEXT CHECK(status IN ('pendente', 'paga', 'cancelada', 'vencida')) DEFAULT 'pendente',
+    data_emissao DATE DEFAULT CURRENT_DATE,
+    data_vencimento DATE,
+    data_pagamento DATETIME,
+    observacoes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (consulta_id) REFERENCES consultas(id) ON DELETE CASCADE,
+    FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE,
+    FOREIGN KEY (medico_id) REFERENCES medicos(id) ON DELETE CASCADE
+);
+
+-- Trigger para gerar número de fatura automaticamente
+CREATE TRIGGER IF NOT EXISTS gerar_numero_fatura
+AFTER INSERT ON faturas
+BEGIN
+    UPDATE faturas
+    SET numero_fatura = 'FAT-' || printf('%06d', NEW.id)
+    WHERE id = NEW.id AND numero_fatura IS NULL;
+END;
+
 -- Índices para performance
 CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);
 CREATE INDEX IF NOT EXISTS idx_usuarios_tipo ON usuarios(tipo);
@@ -124,3 +171,7 @@ CREATE INDEX IF NOT EXISTS idx_consultas_medico ON consultas(medico_id);
 CREATE INDEX IF NOT EXISTS idx_prontuarios_paciente ON prontuarios(paciente_id);
 CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_notificacoes_lida ON notificacoes(lida);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_consulta ON pagamentos(consulta_id);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_status ON pagamentos(status);
+CREATE INDEX IF NOT EXISTS idx_faturas_consulta ON faturas(consulta_id);
+CREATE INDEX IF NOT EXISTS idx_faturas_status ON faturas(status);

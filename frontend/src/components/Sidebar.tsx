@@ -99,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   );
 
   return (
-    <div className={`w-64 h-full fixed left-0 top-0 z-20 transition-transform duration-300 ${
+    <div className={`w-64 h-full fixed left-0 top-0 z-20 transition-transform duration-300 lg:translate-x-0 ${
       isOpen ? 'translate-x-0' : '-translate-x-full'
     }`}>
       {/* Efeito glassmorphism - Sidebar com transparência e blur */}

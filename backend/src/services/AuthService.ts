@@ -120,9 +120,13 @@ export class AuthService {
       }
 
       // Verificar senha
+      console.log('🔐 Verificando senha...');
+      console.log('🔍 Hash no banco:', usuario.senha.substring(0, 30) + '...');
       const senhaValida = await this.verifyPassword(senha, usuario.senha);
+      console.log('🔐 Resultado da verificação:', senhaValida);
       
       if (!senhaValida) {
+        console.log('❌ Senha inválida!');
         return {
           success: false,
           error: {
@@ -131,6 +135,8 @@ export class AuthService {
           }
         };
       }
+      
+      console.log('✅ Senha válida!');
 
       // Gerar token
       const token = this.generateToken(usuario);

@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware CORS - Configurar ANTES de qualquer outro middleware
 // Permitir todas as origens em desenvolvimento
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     // Permitir requisições sem origin (Postman, mobile apps, etc)
     if (!origin) {
       return callback(null, true);

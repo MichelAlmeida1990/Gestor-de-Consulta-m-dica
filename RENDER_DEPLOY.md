@@ -50,7 +50,7 @@ Clique em **"Advanced"** e depois em **"Add Environment Variable"**. Adicione um
 | `JWT_SECRET` | `[GERE_UMA_CHAVE_SEGURA]` | ✅ Sim |
 | `DATABASE_URL` | `./database/clinica.db` | ✅ Sim |
 | `JWT_EXPIRES_IN` | `24h` | ❌ Não |
-| `CORS_ORIGINS` | `https://seu-frontend.vercel.app,http://localhost:3002` | ❌ Não |
+| `CORS_ORIGINS` | `*` (permitir todas - configure depois) | ❌ Não |
 
 #### 🔐 Gerar JWT_SECRET Seguro
 

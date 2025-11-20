@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: gestor-consulta-backend
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: ./database/clinica.db
+      - key: JWT_EXPIRES_IN
+        value: 24h
+

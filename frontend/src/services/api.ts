@@ -2,7 +2,8 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import toast from 'react-hot-toast';
 
 // Configuração base da API - Backend na porta 3001
-const API_BASE_URL = 'http://localhost:3001/api';
+// Usa variável de ambiente se disponível, senão usa localhost
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 // Log da configuração para debug
 console.log('🔗 API Base URL:', API_BASE_URL);
@@ -64,11 +65,11 @@ api.interceptors.request.use(
 
 // Flag para evitar múltiplos redirecionamentos (persiste entre requisições)
 // let isRedirecting = false;
-// let redirectTimeout: NodeJS.Timeout | null = null;
+// let redirectTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // Flag para indicar que acabou de fazer login (evita toast de sessão expirada imediatamente)
 let justLoggedIn = false;
-let justLoggedInTimeout: NodeJS.Timeout | null = null;
+let justLoggedInTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // Função para marcar que acabou de fazer login
 export const setJustLoggedIn = () => {

@@ -30,7 +30,7 @@ Este guia vai te ajudar a fazer deploy do frontend no Vercel de forma simples e 
 Preencha os seguintes campos:
 
 #### Informações Básicas:
-- **Project Name**: `gestor-consulta-frontend` (ou qualquer nome)
+   - **Project Name**: `gestor-consulta-frontend` (ou qualquer nome)
 - **Framework Preset**: `Vite` (deve detectar automaticamente)
 - **Root Directory**: `frontend` ⚠️ **IMPORTANTE!**
 
@@ -38,6 +38,12 @@ Preencha os seguintes campos:
 - **Build Command**: `npm run build` (já vem preenchido)
 - **Output Directory**: `dist` (já vem preenchido)
 - **Install Command**: `npm install` (já vem preenchido)
+
+⚠️ **IMPORTANTE**: O `vercel.json` já está configurado, mas se você configurar manualmente, use:
+- **Root Directory**: `frontend`
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Install Command**: `npm install`
 
 ### 4. Configurar Variáveis de Ambiente
 
